@@ -59,6 +59,7 @@ Varsayılan super admin bilgileri:
 - Çalışma saatleri yönetimi
 - Excel'den toplu çalışan ekleme
 - Şirket ayarları (logo ve başlık)
+- Çalışan kullancı adı ile giriş yapıp izin talebi oluşturarak şirket admini yada tanımlanmış yöneticisine onaya gönderir.
 
 ## Teknolojiler
 

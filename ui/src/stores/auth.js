@@ -10,14 +10,26 @@ export const useAuthStore = defineStore('auth', () => {
   const userRole = computed(() => user.value?.role)
 
   async function login(email, password) {
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'auth.js:12',message:'login entry',data:{email:email,hasPassword:!!password},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
     try {
-      const response = await api.post('/auth/login', { email, password })
+      const response = await api.post('/auth/login', { email, password: password || '' })
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'auth.js:15',message:'api.post success',data:{hasToken:!!response.data.token,hasUser:!!response.data.user,requiresPasswordSetup:response.data.requiresPasswordSetup},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
       token.value = response.data.token
       user.value = response.data.user
       localStorage.setItem('token', response.data.token)
       localStorage.setItem('user', JSON.stringify(response.data.user))
-      return { success: true }
+      return { 
+        success: true, 
+        requiresPasswordSetup: response.data.requiresPasswordSetup || false 
+      }
     } catch (error) {
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'auth.js:27',message:'api.post error',data:{errorMessage:error.message,responseStatus:error.response?.status,responseData:error.response?.data,hasResponse:!!error.response},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
       return { 
         success: false, 
         message: error.response?.data?.message || 'Giriş başarısız' 
@@ -44,6 +56,11 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  function setUser(userData) {
+    user.value = userData
+    localStorage.setItem('user', JSON.stringify(userData))
+  }
+
   return {
     token,
     user,
@@ -51,7 +68,8 @@ export const useAuthStore = defineStore('auth', () => {
     userRole,
     login,
     logout,
-    fetchCurrentUser
+    fetchCurrentUser,
+    setUser
   }
 })
 

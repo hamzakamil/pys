@@ -18,6 +18,10 @@ const dealerSchema = new mongoose.Schema({
   isActive: {
     type: Boolean,
     default: true
+  },
+  maxCompanies: {
+    type: Number,
+    default: null // null = sınırsız, sayı = maksimum şirket sayısı
   }
 }, {
   timestamps: true

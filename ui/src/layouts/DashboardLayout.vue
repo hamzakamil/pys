@@ -54,29 +54,47 @@ const user = computed(() => authStore.user)
 const menuItems = computed(() => {
   const role = user.value?.role
   const items = []
+  // #region agent log
+  fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DashboardLayout.vue:54',message:'menuItems computed',data:{role:role,userId:user.value?.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+  // #endregion
 
   if (role === 'super_admin') {
     items.push({ path: '/', name: 'Dashboard' })
     items.push({ path: '/dealers', name: 'Bayiler' })
     items.push({ path: '/companies', name: 'Şirketler' })
     items.push({ path: '/working-permits', name: 'Çalışan İzinleri' })
-  } else if (role === 'bayi_admin') {
-    items.push({ path: '/', name: 'Dashboard' })
-    items.push({ path: '/companies', name: 'Şirketler' })
-    items.push({ path: '/departments', name: 'Departmanlar' })
-    items.push({ path: '/working-hours', name: 'Çalışma Saatleri' })
-    items.push({ path: '/employees', name: 'Çalışanlar' })
-  } else if (['company_admin', 'resmi_muhasebe_ik'].includes(role)) {
-    items.push({ path: '/', name: 'Dashboard' })
-    items.push({ path: '/settings', name: 'Ayarlar' })
-    items.push({ path: '/working-permits', name: 'Çalışan İzinleri' })
-    items.push({ path: '/departments', name: 'Departmanlar' })
-    items.push({ path: '/working-hours', name: 'Çalışma Saatleri' })
-    items.push({ path: '/employees', name: 'Çalışanlar' })
-  } else if (role === 'employee') {
-    items.push({ path: '/', name: 'Dashboard' })
-  }
+      } else if (role === 'bayi_admin') {
+        items.push({ path: '/', name: 'Dashboard' })
+        items.push({ path: '/companies', name: 'Şirketler' })
+        items.push({ path: '/departments', name: 'Departmanlar' })
+        items.push({ path: '/working-hours', name: 'Çalışma Saatleri' })
+        items.push({ path: '/employees', name: 'Çalışanlar' })
+        items.push({ path: '/attendance-calendar', name: 'Puantaj Takvimi' })
+        items.push({ path: '/employment/list', name: 'İşe Giriş & Çıkış İşlemleri' })
+      } else if (['company_admin', 'resmi_muhasebe_ik'].includes(role)) {
+        items.push({ path: '/', name: 'Dashboard' })
+        items.push({ path: '/settings', name: 'Ayarlar' })
+        items.push({ path: '/holiday-calendar', name: 'Resmi Tatiller' })
+        items.push({ path: '/working-permits', name: 'Çalışan İzinleri' })
+        items.push({ path: '/departments', name: 'Departmanlar' })
+        items.push({ path: '/working-hours', name: 'Çalışma Saatleri' })
+        items.push({ path: '/employees', name: 'Çalışanlar' })
+        items.push({ path: '/attendance-templates', name: 'Puantaj Şablonları' })
+        items.push({ path: '/attendance-calendar', name: 'Puantaj Takvimi' })
+        items.push({ path: '/leave-requests', name: 'İzin Talepleri' })
+        items.push({ path: '/approvals', name: 'Onaylar' })
+        items.push({ path: '/leave-balances', name: 'İzin Bakiyeleri' })
+        items.push({ path: '/weekend-settings', name: 'Hafta Tatili Ayarları' })
+        items.push({ path: '/employment/list', name: 'İşe Giriş & Çıkış İşlemleri' })
+      } else if (role === 'employee') {
+        items.push({ path: '/', name: 'Dashboard' })
+        items.push({ path: '/my-leaves', name: 'İzin Taleplerim' })
+        items.push({ path: '/leave-balances', name: 'İzin Bakiyem' })
+      }
 
+  // #region agent log
+  fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'DashboardLayout.vue:88',message:'menuItems result',data:{items:items.map(i=>({path:i.path,name:i.name})),role:role},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+  // #endregion
   return items
 })
 

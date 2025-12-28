@@ -1,7 +1,26 @@
 const express = require('express');
 const router = express.Router();
+const fs = require('fs');
+const path = require('path');
 const WorkingHours = require('../models/WorkingHours');
 const { auth, requireRole } = require('../middleware/auth');
+
+// Debug logging helper
+const debugLog = (location, message, data, hypothesisId) => {
+  try {
+    const logPath = path.join(__dirname, '..', '.cursor', 'debug.log');
+    const logEntry = JSON.stringify({
+      location,
+      message,
+      data,
+      timestamp: Date.now(),
+      sessionId: 'debug-session',
+      runId: 'run1',
+      hypothesisId
+    }) + '\n';
+    fs.appendFileSync(logPath, logEntry, 'utf8');
+  } catch (e) {}
+};
 
 // Get all working hours
 router.get('/', auth, async (req, res) => {
@@ -78,31 +97,114 @@ router.get('/:id', auth, async (req, res) => {
 
 // Create working hours
 router.post('/', auth, requireRole('super_admin', 'bayi_admin', 'company_admin', 'resmi_muhasebe_ik'), async (req, res) => {
+  // #region agent log
+  debugLog('workingHours.js:80', 'POST /working-hours entry', {body:{...req.body},userRole:req.user?.role?.name,userCompany:req.user?.company?.toString(),userDealer:req.user?.dealer?.toString()}, 'F');
+  // #endregion
   try {
     const { name, company, monday, tuesday, wednesday, thursday, friday, saturday, sunday } = req.body;
+
+    // Validation
+    if (!name || name.trim() === '') {
+      // #region agent log
+      debugLog('workingHours.js:87', 'Validation failed: name empty', {name:name}, 'F');
+      // #endregion
+      return res.status(400).json({ message: 'Ad gereklidir' });
+    }
 
     let companyId = company;
     if (['company_admin', 'resmi_muhasebe_ik'].includes(req.user.role.name)) {
       companyId = req.user.company;
+    } else if (req.user.role.name === 'bayi_admin') {
+      // bayi_admin için şirket seçilmeli veya kullanıcının şirketlerinden biri olmalı
+      if (!company) {
+        // #region agent log
+        debugLog('workingHours.js:96', 'Validation failed: bayi_admin needs company', {company:company,userDealer:req.user?.dealer?.toString()}, 'F');
+        // #endregion
+        return res.status(400).json({ message: 'Şirket seçilmelidir' });
+      }
+      // Bayi admin'in bu şirkete erişimi var mı kontrol et
+      const Company = require('../models/Company');
+      const companyDoc = await Company.findById(company);
+      if (!companyDoc) {
+        return res.status(404).json({ message: 'Şirket bulunamadı' });
+      }
+      if (companyDoc.dealer.toString() !== req.user.dealer.toString()) {
+        return res.status(403).json({ message: 'Bu şirket için yetkiniz yok' });
+      }
+      companyId = company;
+    } else if (req.user.role.name === 'super_admin') {
+      if (!company) {
+        // #region agent log
+        debugLog('workingHours.js:110', 'Validation failed: super_admin needs company', {company:company}, 'F');
+        // #endregion
+        return res.status(400).json({ message: 'Şirket seçilmelidir' });
+      }
+      companyId = company;
     }
+
+    // #region agent log
+    debugLog('workingHours.js:116', 'Before creating working hours', {name:name,companyId:companyId?.toString()}, 'F');
+    // #endregion
+
+    // Helper function to create default day structure
+    const getDefaultDay = (isWorking = true) => ({
+      start: '09:00',
+      end: '18:00',
+      isWorking,
+      lunchBreak: {
+        start: '12:00',
+        end: '13:00'
+      },
+      breaks: {
+        morningBreak: {
+          enabled: false,
+          start: '',
+          end: ''
+        },
+        afternoonBreak: {
+          enabled: false,
+          start: '',
+          end: ''
+        }
+      }
+    });
 
     const workingHours = new WorkingHours({
       name,
       company: companyId,
-      monday: monday || { start: '09:00', end: '18:00', isWorking: true },
-      tuesday: tuesday || { start: '09:00', end: '18:00', isWorking: true },
-      wednesday: wednesday || { start: '09:00', end: '18:00', isWorking: true },
-      thursday: thursday || { start: '09:00', end: '18:00', isWorking: true },
-      friday: friday || { start: '09:00', end: '18:00', isWorking: true },
-      saturday: saturday || { start: '09:00', end: '18:00', isWorking: false },
-      sunday: sunday || { start: '09:00', end: '18:00', isWorking: false }
+      monday: monday || getDefaultDay(true),
+      tuesday: tuesday || getDefaultDay(true),
+      wednesday: wednesday || getDefaultDay(true),
+      thursday: thursday || getDefaultDay(true),
+      friday: friday || getDefaultDay(true),
+      saturday: saturday || getDefaultDay(false),
+      sunday: sunday || getDefaultDay(false)
     });
     await workingHours.save();
+
+    // #region agent log
+    debugLog('workingHours.js:133', 'Working hours saved successfully', {workingHoursId:workingHours._id?.toString()}, 'F');
+    // #endregion
 
     const populated = await WorkingHours.findById(workingHours._id).populate('company');
     res.status(201).json(populated);
   } catch (error) {
-    res.status(500).json({ message: 'Hata', error: error.message });
+    console.error('Çalışma saatleri oluşturma hatası:', error);
+    // #region agent log
+    debugLog('workingHours.js:140', 'POST /working-hours catch block', {errorName:error.name,errorMessage:error.message,errorCode:error.code,errorStack:error.stack?.substring(0,200)}, 'F');
+    // #endregion
+    
+    // Mongoose validation errors
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors).map(err => err.message).join(', ');
+      return res.status(400).json({ 
+        message: `Validasyon hatası: ${errors}` 
+      });
+    }
+    
+    res.status(500).json({ 
+      message: error.message || 'Çalışma saatleri oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.' 
+    });
   }
 });
 

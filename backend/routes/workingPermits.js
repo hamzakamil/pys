@@ -13,18 +13,33 @@ router.get('/', auth, async (req, res) => {
       query = { isDefault: true };
     } else if (['company_admin', 'resmi_muhasebe_ik', 'employee'].includes(req.user.role.name)) {
       // Company users see default + their company's permits
-      query = {
-        $or: [
-          { isDefault: true },
-          { company: req.user.company }
-        ]
-      };
+      if (req.query.companyId) {
+        query = {
+          $or: [
+            { isDefault: true, company: req.query.companyId },
+            { isDefault: false, company: req.query.companyId }
+          ]
+        };
+      } else {
+        query = {
+          $or: [
+            { isDefault: true, company: req.user.company },
+            { isDefault: false, company: req.user.company }
+          ]
+        };
+      }
     } else {
       // bayi_admin sees all
-      query = {};
+      if (req.query.companyId) {
+        query = { company: req.query.companyId };
+      } else {
+        query = {};
+      }
     }
 
-    const permits = await WorkingPermit.find(query).sort({ isDefault: -1, createdAt: -1 });
+    const permits = await WorkingPermit.find(query)
+      .populate('parentPermitId', 'name')
+      .sort({ isDefault: -1, parentPermitId: 1, createdAt: -1 });
     res.json(permits);
   } catch (error) {
     res.status(500).json({ message: 'Hata', error: error.message });
@@ -55,14 +70,19 @@ router.get('/:id', auth, async (req, res) => {
 // Create working permit
 router.post('/', auth, requireRole('super_admin', 'company_admin', 'resmi_muhasebe_ik'), async (req, res) => {
   try {
-    const { name, description } = req.body;
+    const { name, description, parentPermitId } = req.body;
+
+    if (!name || name.trim() === '') {
+      return res.status(400).json({ success: false, message: 'İzin türü adı gereklidir' });
+    }
 
     let permitData = {
-      name,
-      description,
+      name: name.trim(),
+      description: description?.trim() || null,
       isDefault: false,
       createdBy: 'company',
-      company: null
+      company: null,
+      parentPermitId: parentPermitId || null
     };
 
     if (req.user.role.name === 'super_admin') {
@@ -70,14 +90,28 @@ router.post('/', auth, requireRole('super_admin', 'company_admin', 'resmi_muhase
       permitData.createdBy = 'super_admin';
     } else {
       permitData.company = req.user.company;
+      
+      // Parent permit kontrolü - aynı şirkete ait olmalı
+      if (parentPermitId) {
+        const parentPermit = await WorkingPermit.findById(parentPermitId);
+        if (!parentPermit) {
+          return res.status(404).json({ success: false, message: 'Üst kategori bulunamadı' });
+        }
+        if (parentPermit.company && parentPermit.company.toString() !== req.user.company.toString()) {
+          return res.status(403).json({ success: false, message: 'Üst kategori bu şirkete ait değil' });
+        }
+      }
     }
 
     const permit = new WorkingPermit(permitData);
     await permit.save();
 
-    res.status(201).json(permit);
+    const populated = await WorkingPermit.findById(permit._id)
+      .populate('parentPermitId', 'name');
+
+    res.status(201).json({ success: true, data: populated });
   } catch (error) {
-    res.status(500).json({ message: 'Hata', error: error.message });
+    res.status(500).json({ success: false, message: 'Hata', error: error.message });
   }
 });
 
@@ -86,27 +120,54 @@ router.put('/:id', auth, requireRole('super_admin', 'company_admin', 'resmi_muha
   try {
     const permit = await WorkingPermit.findById(req.params.id);
     if (!permit) {
-      return res.status(404).json({ message: 'İzin türü bulunamadı' });
+      return res.status(404).json({ success: false, message: 'İzin türü bulunamadı' });
     }
 
-    // Super admin can update default permits
+    // Varsayılan izinler değiştirilemez (super_admin hariç)
     if (permit.isDefault && req.user.role.name !== 'super_admin') {
-      return res.status(403).json({ message: 'Varsayılan izin türlerini sadece super admin düzenleyebilir' });
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Bu izin türü sistem varsayılanıdır ve değiştirilemez.' 
+      });
     }
 
     // Company users can only update their own permits
     if (!permit.isDefault && permit.company && 
         req.user.role.name !== 'super_admin' &&
         req.user.company.toString() !== permit.company.toString()) {
-      return res.status(403).json({ message: 'Yetkiniz yok' });
+      return res.status(403).json({ success: false, message: 'Yetkiniz yok' });
     }
 
-    Object.assign(permit, req.body);
+    // Parent permit kontrolü
+    if (req.body.parentPermitId !== undefined) {
+      if (req.body.parentPermitId) {
+        const parentPermit = await WorkingPermit.findById(req.body.parentPermitId);
+        if (!parentPermit) {
+          return res.status(404).json({ success: false, message: 'Üst kategori bulunamadı' });
+        }
+        if (permit.company && parentPermit.company && 
+            parentPermit.company.toString() !== permit.company.toString()) {
+          return res.status(403).json({ success: false, message: 'Üst kategori bu şirkete ait değil' });
+        }
+        // Circular reference kontrolü
+        if (req.body.parentPermitId === req.params.id) {
+          return res.status(400).json({ success: false, message: 'İzin türü kendi üst kategorisi olamaz' });
+        }
+      }
+      permit.parentPermitId = req.body.parentPermitId || null;
+    }
+
+    if (req.body.name !== undefined) permit.name = req.body.name.trim();
+    if (req.body.description !== undefined) permit.description = req.body.description?.trim() || null;
+
     await permit.save();
 
-    res.json(permit);
+    const populated = await WorkingPermit.findById(permit._id)
+      .populate('parentPermitId', 'name');
+
+    res.json({ success: true, data: populated });
   } catch (error) {
-    res.status(500).json({ message: 'Hata', error: error.message });
+    res.status(500).json({ success: false, message: 'Hata', error: error.message });
   }
 });
 
@@ -115,25 +176,37 @@ router.delete('/:id', auth, requireRole('super_admin', 'company_admin', 'resmi_m
   try {
     const permit = await WorkingPermit.findById(req.params.id);
     if (!permit) {
-      return res.status(404).json({ message: 'İzin türü bulunamadı' });
+      return res.status(404).json({ success: false, message: 'İzin türü bulunamadı' });
     }
 
-    // Super admin can delete default permits
+    // Varsayılan izinler silinemez (super_admin hariç)
     if (permit.isDefault && req.user.role.name !== 'super_admin') {
-      return res.status(403).json({ message: 'Varsayılan izin türlerini sadece super admin silebilir' });
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Bu izin türü sistem varsayılanıdır ve değiştirilemez.' 
+      });
     }
 
     // Company users can only delete their own permits
     if (!permit.isDefault && permit.company && 
         req.user.role.name !== 'super_admin' &&
         req.user.company.toString() !== permit.company.toString()) {
-      return res.status(403).json({ message: 'Yetkiniz yok' });
+      return res.status(403).json({ success: false, message: 'Yetkiniz yok' });
+    }
+
+    // Alt kategori var mı kontrol et
+    const childPermits = await WorkingPermit.countDocuments({ parentPermitId: permit._id });
+    if (childPermits > 0) {
+      return res.status(400).json({ 
+        success: false, 
+        message: `Bu izin türüne bağlı ${childPermits} alt kategori bulunmaktadır. Önce alt kategorileri silin.` 
+      });
     }
 
     await WorkingPermit.findByIdAndDelete(req.params.id);
-    res.json({ message: 'İzin türü silindi' });
+    res.json({ success: true, message: 'İzin türü silindi' });
   } catch (error) {
-    res.status(500).json({ message: 'Hata', error: error.message });
+    res.status(500).json({ success: false, message: 'Hata', error: error.message });
   }
 });
 

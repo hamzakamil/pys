@@ -12,6 +12,11 @@ const workingPermitSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  parentPermitId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'WorkingPermit',
+    default: null // Alt kategori için parent referansı
+  },
   createdBy: {
     type: String,
     enum: ['super_admin', 'company'],

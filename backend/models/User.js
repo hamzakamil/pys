@@ -10,7 +10,8 @@ const userSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: true
+    required: false, // Employee için ilk girişte şifre olmayabilir
+    default: null
   },
   role: {
     type: mongoose.Schema.Types.ObjectId,
@@ -30,6 +31,10 @@ const userSchema = new mongoose.Schema({
   isActive: {
     type: Boolean,
     default: true
+  },
+  mustChangePassword: {
+    type: Boolean,
+    default: false // İlk girişte şifre değiştirme zorunluluğu
   }
 }, {
   timestamps: true

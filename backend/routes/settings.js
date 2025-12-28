@@ -31,7 +31,8 @@ router.get('/', auth, requireRole('company_admin', 'resmi_muhasebe_ik'), async (
 
     res.json({
       logo: company.logo,
-      title: company.title
+      title: company.title,
+      checkInSettings: company.checkInSettings || null
     });
   } catch (error) {
     res.status(500).json({ message: 'Hata', error: error.message });
@@ -72,11 +73,30 @@ router.put('/', auth, requireRole('company_admin', 'resmi_muhasebe_ik'), upload.
       company.logo = `/uploads/${fileName}`;
     }
 
+    // Update check-in settings if provided
+    if (req.body.checkInSettings) {
+      const checkInSettings = JSON.parse(req.body.checkInSettings || '{}');
+      if (!company.checkInSettings) {
+        company.checkInSettings = {};
+      }
+      if (checkInSettings.enabled !== undefined) company.checkInSettings.enabled = checkInSettings.enabled;
+      if (checkInSettings.locationRequired !== undefined) company.checkInSettings.locationRequired = checkInSettings.locationRequired;
+      if (checkInSettings.autoCheckIn !== undefined) company.checkInSettings.autoCheckIn = checkInSettings.autoCheckIn;
+      if (checkInSettings.allowedLocation) {
+        company.checkInSettings.allowedLocation = {
+          latitude: parseFloat(checkInSettings.allowedLocation.latitude),
+          longitude: parseFloat(checkInSettings.allowedLocation.longitude),
+          radius: parseFloat(checkInSettings.allowedLocation.radius || 100)
+        };
+      }
+    }
+
     await company.save();
 
     res.json({
       logo: company.logo,
-      title: company.title
+      title: company.title,
+      checkInSettings: company.checkInSettings
     });
   } catch (error) {
     res.status(500).json({ message: 'Hata', error: error.message });

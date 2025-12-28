@@ -12,6 +12,7 @@
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ad</th>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Telefon</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Maks. Şirket</th>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">İşlemler</th>
           </tr>
         </thead>
@@ -20,6 +21,9 @@
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ dealer.name }}</td>
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ dealer.contactEmail }}</td>
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ dealer.contactPhone }}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              {{ dealer.maxCompanies !== null && dealer.maxCompanies !== undefined ? dealer.maxCompanies : 'Sınırsız' }}
+            </td>
             <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
               <button @click="viewCompanies(dealer._id)" class="text-blue-600 hover:text-blue-900 mr-4">Şirketler</button>
               <button @click="editDealer(dealer)" class="text-indigo-600 hover:text-indigo-900 mr-4">Düzenle</button>
@@ -40,6 +44,14 @@
             <Input v-model="form.contactEmail" type="email" label="İletişim Email" required />
             <Input v-model="form.contactPhone" label="Telefon" />
             <Textarea v-model="form.address" label="Adres" />
+            <Input 
+              v-model.number="form.maxCompanies" 
+              type="number" 
+              label="Maksimum Şirket Sayısı" 
+              min="0"
+              placeholder="Boş bırakılırsa sınırsız"
+            />
+            <p class="text-xs text-gray-500">Bu bayi için maksimum şirket sayısı. Boş bırakılırsa sınırsız şirket ekleyebilir.</p>
             <div v-if="!editingDealer">
               <Input v-model="form.email" type="email" label="Admin Email" required />
               <Input v-model="form.password" type="password" label="Admin Şifre" required />
@@ -70,6 +82,7 @@ const form = ref({
   contactEmail: '',
   contactPhone: '',
   address: '',
+  maxCompanies: null,
   email: '',
   password: ''
 })
@@ -104,6 +117,7 @@ const editDealer = (dealer) => {
     contactEmail: dealer.contactEmail,
     contactPhone: dealer.contactPhone || '',
     address: dealer.address || '',
+    maxCompanies: dealer.maxCompanies || null,
     email: '',
     password: ''
   }
@@ -134,6 +148,7 @@ const closeModal = () => {
     contactEmail: '',
     contactPhone: '',
     address: '',
+    maxCompanies: null,
     email: '',
     password: ''
   }

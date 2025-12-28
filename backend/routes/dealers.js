@@ -38,13 +38,14 @@ router.get('/:id', auth, requireRole('super_admin', 'bayi_admin'), async (req, r
 // Create dealer (only super_admin)
 router.post('/', auth, requireRole('super_admin'), async (req, res) => {
   try {
-    const { name, contactEmail, contactPhone, address, email, password } = req.body;
+    const { name, contactEmail, contactPhone, address, maxCompanies, email, password } = req.body;
 
     const dealer = new Dealer({
       name,
       contactEmail,
       contactPhone,
-      address
+      address,
+      maxCompanies: maxCompanies !== undefined && maxCompanies !== null && maxCompanies !== '' ? parseInt(maxCompanies) : null
     });
     await dealer.save();
 
@@ -79,7 +80,17 @@ router.put('/:id', auth, requireRole('super_admin', 'bayi_admin'), async (req, r
       return res.status(403).json({ message: 'Yetkiniz yok' });
     }
 
-    Object.assign(dealer, req.body);
+    // Update fields (maxCompanies can be set to null for unlimited)
+    const { name, contactEmail, contactPhone, address, maxCompanies } = req.body;
+    
+    if (name !== undefined) dealer.name = name;
+    if (contactEmail !== undefined) dealer.contactEmail = contactEmail;
+    if (contactPhone !== undefined) dealer.contactPhone = contactPhone;
+    if (address !== undefined) dealer.address = address;
+    if (maxCompanies !== undefined) {
+      dealer.maxCompanies = maxCompanies !== null && maxCompanies !== '' ? parseInt(maxCompanies) : null;
+    }
+    
     await dealer.save();
 
     res.json(dealer);

@@ -43,15 +43,36 @@ const error = ref('')
 const loading = ref(false)
 
 const handleLogin = async () => {
+  // #region agent log
+  fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Login.vue:48',message:'handleLogin entry',data:{email:email.value,hasPassword:!!password.value},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+  // #endregion
   error.value = ''
   loading.value = true
 
-  const result = await authStore.login(email.value, password.value)
+  try {
+    const result = await authStore.login(email.value, password.value)
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Login.vue:57',message:'authStore.login result',data:{success:result.success,message:result.message,hasUser:!!authStore.user},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
 
-  if (result.success) {
-    router.push('/')
-  } else {
-    error.value = result.message
+    if (result.success) {
+      // İlk girişte şifre belirleme zorunlu ise ayarlar sayfasına yönlendir
+      if (authStore.user?.mustChangePassword || result.requiresPasswordSetup) {
+        router.push('/settings?changePassword=true')
+      } else {
+        router.push('/')
+      }
+    } else {
+      error.value = result.message || 'Giriş hatası'
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Login.vue:68',message:'Login failed',data:{errorMessage:error.value},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
+    }
+  } catch (err) {
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Login.vue:72',message:'handleLogin exception',data:{error:err.message,errorStack:err.stack},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+    // #endregion
+    error.value = err.message || 'Giriş hatası'
   }
 
   loading.value = false
