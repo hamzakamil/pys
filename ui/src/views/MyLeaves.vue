@@ -15,94 +15,150 @@
       {{ store.error }}
     </div>
 
-    <!-- Requests List -->
-    <div v-if="!store.loading" class="space-y-4">
-      <div
-        v-for="request in store.myRequests"
-        :key="request._id"
-        class="bg-white rounded-lg shadow p-6 border-l-4"
-        :class="getStatusBorderClass(request.status)"
-      >
-        <div class="flex justify-between items-start">
-          <div class="flex-1">
-            <div class="flex items-center gap-3 mb-2">
-              <h3 class="text-lg font-semibold text-gray-800">
-                {{ request.leaveSubType?.name || request.companyLeaveType?.name || request.type }}
-              </h3>
-              <span
-                class="px-3 py-1 rounded-full text-xs font-medium"
-                :class="getStatusClass(request.status)"
-              >
-                {{ getStatusText(request.status) }}
-              </span>
-            </div>
-            
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-gray-600 mb-3">
-              <div>
-                <span class="font-medium">Başlangıç:</span>
-                <p>{{ formatDate(request.startDate) }}</p>
-                <p v-if="request.startTime" class="text-xs">{{ request.startTime }}</p>
+    <!-- Son Aldığı İzinler (Onaylanmış) -->
+    <div v-if="!store.loading && approvedLeaves.length > 0" class="mb-8">
+      <h2 class="text-xl font-bold text-gray-800 mb-4">Son Aldığım İzinler</h2>
+      <div class="space-y-4">
+        <div
+          v-for="request in approvedLeaves"
+          :key="request._id"
+          class="bg-green-50 rounded-lg shadow p-6 border-l-4 border-green-400"
+        >
+          <div class="flex justify-between items-start">
+            <div class="flex-1">
+              <div class="flex items-center gap-3 mb-2">
+                <h3 class="text-lg font-semibold text-gray-800">
+                  {{ request.leaveSubType?.name || request.companyLeaveType?.name || request.type }}
+                </h3>
+                <span class="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                  Onaylandı
+                </span>
               </div>
-              <div>
-                <span class="font-medium">Bitiş:</span>
-                <p>{{ formatDate(request.endDate) }}</p>
-                <p v-if="request.endTime" class="text-xs">{{ request.endTime }}</p>
-              </div>
-              <div>
-                <span class="font-medium">Süre:</span>
-                <p>{{ request.totalDays }} {{ request.isHourly ? 'saat' : 'gün' }}</p>
-              </div>
-              <div>
-                <span class="font-medium">Oluşturulma:</span>
-                <p>{{ formatDate(request.createdAt) }}</p>
-              </div>
-            </div>
-
-            <div v-if="request.description" class="mb-3">
-              <span class="font-medium text-gray-700">Açıklama:</span>
-              <p class="text-gray-600 text-sm mt-1">{{ request.description }}</p>
-            </div>
-
-            <!-- Current Approver -->
-            <div v-if="request.currentApprover && request.status === 'IN_PROGRESS'" class="mb-3">
-              <p class="text-sm text-yellow-600">
-                <span class="font-medium">Onay Bekleniyor:</span>
-                {{ request.currentApprover?.firstName }} {{ request.currentApprover?.lastName }}
-              </p>
-            </div>
-
-            <!-- Rejection Reason -->
-            <div v-if="request.status === 'REJECTED' && request.rejectReason" class="mt-3 p-3 bg-red-50 border border-red-200 rounded">
-              <p class="text-sm text-red-700">
-                <span class="font-medium">Red Nedeni:</span>
-                "{{ request.rejectReason }}"
-              </p>
-            </div>
-
-            <!-- History -->
-            <div v-if="request.history && request.history.length > 0" class="mt-4 pt-4 border-t">
-              <p class="text-sm font-medium text-gray-700 mb-2">Onay Geçmişi:</p>
-              <div class="space-y-2">
-                <div
-                  v-for="(item, index) in request.history"
-                  :key="index"
-                  class="text-xs text-gray-600 flex items-center gap-2"
-                >
-                  <span class="font-medium">{{ item.approver?.firstName }} {{ item.approver?.lastName }}:</span>
-                  <span :class="getStatusTextClass(item.status)">{{ getStatusText(item.status) }}</span>
-                  <span class="text-gray-400">•</span>
-                  <span>{{ formatDate(item.date) }}</span>
-                  <span v-if="item.note" class="text-gray-500 italic">- {{ item.note }}</span>
+              
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-gray-600 mb-3">
+                <div>
+                  <span class="font-medium">Başlangıç:</span>
+                  <p>{{ formatDate(request.startDate) }}</p>
+                  <p v-if="request.startTime" class="text-xs">{{ request.startTime }}</p>
                 </div>
+                <div>
+                  <span class="font-medium">Bitiş:</span>
+                  <p>{{ formatDate(request.endDate) }}</p>
+                  <p v-if="request.endTime" class="text-xs">{{ request.endTime }}</p>
+                </div>
+                <div>
+                  <span class="font-medium">Süre:</span>
+                  <p>{{ request.totalDays }} {{ request.isHourly ? 'saat' : 'gün' }}</p>
+                </div>
+                <div>
+                  <span class="font-medium">Onay Tarihi:</span>
+                  <p>{{ formatDate(request.updatedAt) }}</p>
+                </div>
+              </div>
+
+              <div v-if="request.description" class="mb-3">
+                <span class="font-medium text-gray-700">Açıklama:</span>
+                <p class="text-gray-600 text-sm mt-1">{{ request.description }}</p>
               </div>
             </div>
           </div>
         </div>
       </div>
+    </div>
 
+    <!-- Tüm İzin Talepleri -->
+    <div v-if="!store.loading">
+      <h2 class="text-xl font-bold text-gray-800 mb-4">Tüm İzin Taleplerim</h2>
+      
       <!-- Empty State -->
-      <div v-if="store.myRequests.length === 0 && !store.loading" class="text-center py-12 bg-white rounded-lg shadow">
+      <div v-if="store.myRequests.length === 0" class="text-center py-12 bg-white rounded-lg shadow">
         <p class="text-gray-500">Henüz izin talebiniz bulunmamaktadır.</p>
+      </div>
+      
+      <!-- Requests List -->
+      <div v-else class="space-y-4">
+        <div
+          v-for="request in store.myRequests"
+          :key="request._id"
+          class="bg-white rounded-lg shadow p-6 border-l-4"
+          :class="getStatusBorderClass(request.status)"
+        >
+          <div class="flex justify-between items-start">
+            <div class="flex-1">
+              <div class="flex items-center gap-3 mb-2">
+                <h3 class="text-lg font-semibold text-gray-800">
+                  {{ request.leaveSubType?.name || request.companyLeaveType?.name || request.type }}
+                </h3>
+                <span
+                  class="px-3 py-1 rounded-full text-xs font-medium"
+                  :class="getStatusClass(request.status)"
+                >
+                  {{ getStatusText(request.status) }}
+                </span>
+              </div>
+              
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-gray-600 mb-3">
+                <div>
+                  <span class="font-medium">Başlangıç:</span>
+                  <p>{{ formatDate(request.startDate) }}</p>
+                  <p v-if="request.startTime" class="text-xs">{{ request.startTime }}</p>
+                </div>
+                <div>
+                  <span class="font-medium">Bitiş:</span>
+                  <p>{{ formatDate(request.endDate) }}</p>
+                  <p v-if="request.endTime" class="text-xs">{{ request.endTime }}</p>
+                </div>
+                <div>
+                  <span class="font-medium">Süre:</span>
+                  <p>{{ request.totalDays }} {{ request.isHourly ? 'saat' : 'gün' }}</p>
+                </div>
+                <div>
+                  <span class="font-medium">Oluşturulma:</span>
+                  <p>{{ formatDate(request.createdAt) }}</p>
+                </div>
+              </div>
+
+              <div v-if="request.description" class="mb-3">
+                <span class="font-medium text-gray-700">Açıklama:</span>
+                <p class="text-gray-600 text-sm mt-1">{{ request.description }}</p>
+              </div>
+
+              <!-- Current Approver -->
+              <div v-if="request.currentApprover && request.status === 'IN_PROGRESS'" class="mb-3">
+                <p class="text-sm text-yellow-600">
+                  <span class="font-medium">Onay Bekleniyor:</span>
+                  {{ request.currentApprover?.firstName }} {{ request.currentApprover?.lastName }}
+                </p>
+              </div>
+
+              <!-- Rejection Reason -->
+              <div v-if="request.status === 'REJECTED' && request.rejectReason" class="mt-3 p-3 bg-red-50 border border-red-200 rounded">
+                <p class="text-sm text-red-700">
+                  <span class="font-medium">Red Nedeni:</span>
+                  "{{ request.rejectReason }}"
+                </p>
+              </div>
+
+              <!-- History -->
+              <div v-if="request.history && request.history.length > 0" class="mt-4 pt-4 border-t">
+                <p class="text-sm font-medium text-gray-700 mb-2">Onay Geçmişi:</p>
+                <div class="space-y-2">
+                  <div
+                    v-for="(item, index) in request.history"
+                    :key="index"
+                    class="text-xs text-gray-600 flex items-center gap-2"
+                  >
+                    <span class="font-medium">{{ item.approver?.firstName }} {{ item.approver?.lastName }}:</span>
+                    <span :class="getStatusTextClass(item.status)">{{ getStatusText(item.status) }}</span>
+                    <span class="text-gray-400">•</span>
+                    <span>{{ formatDate(item.date) }}</span>
+                    <span v-if="item.note" class="text-gray-500 italic">- {{ item.note }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -186,7 +242,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useLeaveRequestsStore } from '@/stores/leaveRequests'
 import api from '@/services/api'
 import Button from '@/components/Button.vue'
@@ -196,6 +252,14 @@ const showModal = ref(false)
 const saving = ref(false)
 const leaveTypes = ref([])
 const leaveSubTypes = ref([])
+
+// Onaylanmış izinleri ayrı göster
+const approvedLeaves = computed(() => {
+  return store.myRequests
+    .filter(req => req.status === 'APPROVED')
+    .sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt))
+    .slice(0, 5) // Son 5 onaylanmış izin
+})
 
 const form = ref({
   companyLeaveType: '',

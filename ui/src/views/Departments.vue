@@ -257,11 +257,17 @@ const parentDepartments = computed(() => {
 })
 
 const merkezDepartment = computed(() => {
+  // #region agent log
+  fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Departments.vue:merkezDepartment-computed',message:'merkezDepartment computed',data:{departmentsLength:departments.value?.length,departmentsSample:departments.value?.slice(0,2)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+  // #endregion
   return departments.value.find(dept => dept.isDefault === true)
 })
 
 const activeParentDepartments = computed(() => {
   // Aktif, Merkez olmayan, parent olmayan departmanlar
+  // #region agent log
+  fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Departments.vue:activeParentDepartments-computed',message:'activeParentDepartments computed',data:{departmentsLength:departments.value?.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+  // #endregion
   return departments.value.filter(dept => 
     dept.isActive === true &&
     !dept.isDefault &&
@@ -272,6 +278,16 @@ const activeParentDepartments = computed(() => {
 const inactiveDepartments = computed(() => {
   // Pasif departmanlar (ağaç yapısı korunarak)
   return departments.value.filter(dept => dept.isActive === false)
+})
+
+const topLevelDepartments = computed(() => {
+  // Parent'ı olmayan, aktif, merkez olmayan departmanlar
+  return departments.value.filter(dept => 
+    (!dept.parentDepartment || (typeof dept.parentDepartment === 'object' && !dept.parentDepartment._id)) &&
+    (!dept.parent) &&
+    dept.isActive !== false &&
+    !dept.isDefault
+  )
 })
 
 const getActiveChildDepartments = (parentId) => {
@@ -314,10 +330,22 @@ const availableEmployees = computed(() => {
 })
 
 const loadDepartments = async () => {
+  // #region agent log
+  fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Departments.vue:loadDepartments-entry',message:'loadDepartments entry',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+  // #endregion
   try {
     const response = await api.get('/departments')
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Departments.vue:loadDepartments-success',message:'Departments loaded',data:{responseStatus:response.status,dataLength:response.data?.length,dataType:typeof response.data,firstItem:response.data?.[0]},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
     departments.value = response.data
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Departments.vue:loadDepartments-after-assignment',message:'departments.value assigned',data:{departmentsLength:departments.value?.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+    // #endregion
   } catch (error) {
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Departments.vue:loadDepartments-error',message:'Failed to load departments',data:{error:error.message,response:error.response?.data},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
     console.error('Departmanlar yüklenemedi:', error)
   }
 }
@@ -412,6 +440,9 @@ const closeModal = () => {
 }
 
 onMounted(() => {
+  // #region agent log
+  fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Departments.vue:onMounted-entry',message:'onMounted entry',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+  // #endregion
   loadDepartments()
   loadWorkingHours()
   loadEmployees()

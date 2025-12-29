@@ -271,6 +271,175 @@
         </div>
       </form>
     </div>
+
+    <!-- İzin Talepleri Bölümü -->
+    <div class="bg-white rounded-lg shadow p-6 mt-6">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-lg font-semibold text-gray-800">İzin Talepleri</h2>
+        <Button @click="showLeaveRequestModal = true">Yeni İzin Talebi Ekle</Button>
+      </div>
+
+      <!-- Filtreler -->
+      <div class="mb-4 flex gap-2">
+        <select
+          v-model="leaveFilterStatus"
+          @change="loadLeaveRequests"
+          class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="">Tüm Durumlar</option>
+          <option value="PENDING">Bekleyen</option>
+          <option value="IN_PROGRESS">Onay Sürecinde</option>
+          <option value="APPROVED">Onaylanan</option>
+          <option value="REJECTED">Reddedilen</option>
+        </select>
+      </div>
+
+      <!-- İzin Talepleri Listesi -->
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">İzin Türü</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Başlangıç</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bitiş</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Gün</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Durum</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">İşlemler</th>
+            </tr>
+          </thead>
+          <tbody class="bg-white divide-y divide-gray-200">
+            <tr v-for="request in leaveRequests" :key="request._id">
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                {{ request.leaveSubType?.name || request.companyLeaveType?.name || request.type }}
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                {{ formatDate(request.startDate) }}
+                <span v-if="request.startTime" class="text-gray-400"> ({{ request.startTime }})</span>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                {{ formatDate(request.endDate) }}
+                <span v-if="request.endTime" class="text-gray-400"> ({{ request.endTime }})</span>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                {{ request.totalDays }} {{ request.isHourly ? 'saat' : 'gün' }}
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap">
+                <span
+                  :class="{
+                    'bg-yellow-100 text-yellow-800': request.status === 'PENDING' || request.status === 'IN_PROGRESS',
+                    'bg-green-100 text-green-800': request.status === 'APPROVED',
+                    'bg-red-100 text-red-800': request.status === 'REJECTED'
+                  }"
+                  class="px-2 py-1 text-xs font-semibold rounded-full"
+                >
+                  {{ getLeaveStatusText(request.status) }}
+                </span>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                <button
+                  @click="viewLeaveRequest(request)"
+                  class="text-blue-600 hover:text-blue-900 mr-3"
+                >
+                  Görüntüle
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div v-if="leaveRequests.length === 0" class="text-center py-8 text-gray-500">
+          Henüz izin talebi bulunmamaktadır.
+        </div>
+      </div>
+    </div>
+
+    <!-- İzin Talebi Ekleme Modal -->
+    <div v-if="showLeaveRequestModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
+      <div class="bg-white rounded-lg p-6 w-full max-w-2xl my-8">
+        <h2 class="text-xl font-bold mb-4">Yeni İzin Talebi</h2>
+        <form @submit.prevent="createLeaveRequest">
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">
+                İzin Türü <span class="text-red-500">*</span>
+              </label>
+              <select
+                v-model="leaveRequestForm.companyLeaveType"
+                @change="handleLeaveTypeChange"
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              >
+                <option value="">Seçiniz</option>
+                <option
+                  v-for="type in leaveTypes"
+                  :key="type._id"
+                  :value="type._id"
+                >
+                  {{ type.name }}
+                </option>
+              </select>
+            </div>
+
+            <div v-if="selectedLeaveType?.isOtherCategory && filteredSubTypes.length > 0">
+              <label class="block text-sm font-medium text-gray-700 mb-1">Alt İzin Türü *</label>
+              <select
+                v-model="leaveRequestForm.leaveSubType"
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              >
+                <option value="">Seçiniz</option>
+                <option v-for="subType in filteredSubTypes" :key="subType._id" :value="subType._id">
+                  {{ subType.name }}
+                </option>
+              </select>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                  Başlangıç Tarihi <span class="text-red-500">*</span>
+                </label>
+                <input
+                  v-model="leaveRequestForm.startDate"
+                  type="date"
+                  @change="calculateLeaveDays"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                  Bitiş Tarihi <span class="text-red-500">*</span>
+                </label>
+                <input
+                  v-model="leaveRequestForm.endDate"
+                  type="date"
+                  @change="calculateLeaveDays"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Açıklama</label>
+              <textarea
+                v-model="leaveRequestForm.description"
+                rows="3"
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="İzin talebi açıklaması"
+              ></textarea>
+            </div>
+
+            <div class="flex gap-2 justify-end">
+              <Button variant="secondary" @click="showLeaveRequestModal = false" type="button">İptal</Button>
+              <Button type="submit" :disabled="savingLeaveRequest">
+                {{ savingLeaveRequest ? 'Gönderiliyor...' : 'Gönder' }}
+              </Button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -291,6 +460,36 @@ const departments = ref([])
 const allEmployees = ref([]) // Tüm çalışanlar (manager seçimi için)
 const saving = ref(false)
 const hasChanges = ref(false)
+
+// İzin talepleri için
+const leaveRequests = ref([])
+const leaveTypes = ref([])
+const leaveSubTypes = ref([])
+const showLeaveRequestModal = ref(false)
+const leaveFilterStatus = ref('')
+const savingLeaveRequest = ref(false)
+
+const leaveRequestForm = ref({
+  companyLeaveType: '',
+  leaveSubType: '',
+  startDate: '',
+  endDate: '',
+  description: ''
+})
+
+const selectedLeaveType = computed(() => {
+  return leaveTypes.value.find(t => t._id === leaveRequestForm.value.companyLeaveType)
+})
+
+const filteredSubTypes = computed(() => {
+  if (!selectedLeaveType.value?.isOtherCategory) {
+    return []
+  }
+  return leaveSubTypes.value.filter(st => 
+    st.parentLeaveType && 
+    st.parentLeaveType.toString() === selectedLeaveType.value._id.toString()
+  )
+})
 
 const form = ref({
   firstName: '',
@@ -358,12 +557,21 @@ const allExitReasons = [
 ]
 
 const loadEmployee = async () => {
+  // #region agent log
+  fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'EmployeeSettings.vue:loadEmployee',message:'loadEmployee entry',data:{routeId:route.params.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'N'})}).catch(()=>{});
+  // #endregion
   try {
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'EmployeeSettings.vue:loadEmployee',message:'Before API call',data:{endpoint:`/employees/${route.params.id}`},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'O'})}).catch(()=>{});
+    // #endregion
     const response = await api.get(`/employees/${route.params.id}`)
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'EmployeeSettings.vue:loadEmployee',message:'API response received',data:{status:response.status,hasData:!!response.data,employeeId:response.data?._id,companyId:response.data?.company?._id||response.data?.company},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'P'})}).catch(()=>{});
+    // #endregion
     employee.value = response.data
     
     // Format dates for input
-    const formatDate = (date) => {
+    const formatDateForInput = (date) => {
       if (!date) return ''
       const d = new Date(date)
       return d.toISOString().split('T')[0]
@@ -379,9 +587,9 @@ const loadEmployee = async () => {
       phone: employee.value.phone || '',
       tcKimlik: employee.value.tcKimlik || '',
       position: employee.value.position || '',
-      birthDate: formatDate(employee.value.birthDate),
-      hireDate: formatDate(employee.value.hireDate),
-      exitDate: formatDate(employee.value.exitDate),
+      birthDate: formatDateForInput(employee.value.birthDate),
+      hireDate: formatDateForInput(employee.value.hireDate),
+      exitDate: formatDateForInput(employee.value.exitDate),
       exitReason: employee.value.exitReason || '',
       exitReasonCode: employee.value.exitReasonCode || '',
       salary: employee.value.salary || null,
@@ -398,7 +606,20 @@ const loadEmployee = async () => {
       manager: employee.value.manager?._id || employee.value.manager || ''
     }
     hasChanges.value = false
+    
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'EmployeeSettings.vue:loadEmployee',message:'Before loading leave requests and types',data:{employeeId:employee.value._id,companyId:employee.value.company?._id||employee.value.company},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'Q'})}).catch(()=>{});
+    // #endregion
+    // İzin talepleri ve izin türlerini yükle
+    await loadLeaveRequests()
+    await loadLeaveTypes()
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'EmployeeSettings.vue:loadEmployee',message:'After loading leave requests and types',data:{leaveRequestsCount:leaveRequests.value.length,leaveTypesCount:leaveTypes.value.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'R'})}).catch(()=>{});
+    // #endregion
   } catch (error) {
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'EmployeeSettings.vue:loadEmployee',message:'Error loading employee',data:{error:error.message,responseStatus:error.response?.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'S'})}).catch(()=>{});
+    // #endregion
     console.error('Personel yüklenemedi:', error)
     alert('Personel bilgileri yüklenemedi')
   }
@@ -583,11 +804,197 @@ const beforeUnload = (e) => {
   }
 }
 
-onMounted(() => {
-  loadEmployee()
-  loadDepartments()
-  loadEmployees()
+const formatDate = (date) => {
+  if (!date) return '-'
+  return new Date(date).toLocaleDateString('tr-TR', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  })
+}
+
+const getLeaveStatusText = (status) => {
+  const statusMap = {
+    'PENDING': 'Bekleyen',
+    'IN_PROGRESS': 'Onay Sürecinde',
+    'APPROVED': 'Onaylanan',
+    'REJECTED': 'Reddedilen'
+  }
+  return statusMap[status] || status
+}
+
+const loadLeaveRequests = async () => {
+  // #region agent log
+  fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'EmployeeSettings.vue:loadLeaveRequests',message:'loadLeaveRequests entry',data:{employeeId:employee.value?._id,hasEmployee:!!employee.value},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+  // #endregion
+  if (!employee.value?._id) {
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'EmployeeSettings.vue:loadLeaveRequests',message:'No employee ID, returning early',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
+    return
+  }
+  
+  try {
+    const params = { employee: employee.value._id }
+    if (leaveFilterStatus.value) {
+      params.status = leaveFilterStatus.value
+    }
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'EmployeeSettings.vue:loadLeaveRequests',message:'Before API call',data:{params,employeeId:employee.value._id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+    // #endregion
+    const response = await api.get('/leave-requests', { params })
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'EmployeeSettings.vue:loadLeaveRequests',message:'API response received',data:{status:response.status,dataLength:response.data?.length,dataType:Array.isArray(response.data)?'array':'other'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+    // #endregion
+    leaveRequests.value = response.data || []
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'EmployeeSettings.vue:loadLeaveRequests',message:'Leave requests set',data:{count:leaveRequests.value.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+    // #endregion
+  } catch (error) {
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'EmployeeSettings.vue:loadLeaveRequests',message:'Error loading leave requests',data:{error:error.message,responseStatus:error.response?.status,responseData:error.response?.data},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+    // #endregion
+    console.error('İzin talepleri yüklenemedi:', error)
+    leaveRequests.value = []
+  }
+}
+
+const loadLeaveTypes = async () => {
+  // #region agent log
+  fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'EmployeeSettings.vue:loadLeaveTypes',message:'loadLeaveTypes entry',data:{hasCompany:!!employee.value?.company,companyId:employee.value?.company?._id||employee.value?.company},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'G'})}).catch(()=>{});
+  // #endregion
+  if (!employee.value?.company) {
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'EmployeeSettings.vue:loadLeaveTypes',message:'No company, returning early',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H'})}).catch(()=>{});
+    // #endregion
+    return
+  }
+  
+  try {
+    const companyId = employee.value.company._id || employee.value.company
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'EmployeeSettings.vue:loadLeaveTypes',message:'Before API call',data:{companyId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I'})}).catch(()=>{});
+    // #endregion
+    const response = await api.get('/leave-types', {
+      params: { companyId }
+    })
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'EmployeeSettings.vue:loadLeaveTypes',message:'API response received',data:{status:response.status,success:response.data?.success,dataLength:response.data?.data?.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'J'})}).catch(()=>{});
+    // #endregion
+    if (response.data.success) {
+      leaveTypes.value = response.data.data || []
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'EmployeeSettings.vue:loadLeaveTypes',message:'Leave types set',data:{count:leaveTypes.value.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'K'})}).catch(()=>{});
+      // #endregion
+    }
+  } catch (error) {
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'EmployeeSettings.vue:loadLeaveTypes',message:'Error loading leave types',data:{error:error.message,responseStatus:error.response?.status,responseData:error.response?.data},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'L'})}).catch(()=>{});
+    // #endregion
+    console.error('İzin türleri yüklenemedi:', error)
+  }
+}
+
+const loadLeaveSubTypes = async () => {
+  if (!selectedLeaveType.value?.isOtherCategory || !selectedLeaveType.value._id) {
+    leaveSubTypes.value = []
+    return
+  }
+  
+  try {
+    const params = { parentLeaveType: selectedLeaveType.value._id }
+    if (employee.value?.company) {
+      params.companyId = employee.value.company._id || employee.value.company
+    }
+    const response = await api.get('/leave-types/sub-types', { params })
+    if (response.data.success) {
+      leaveSubTypes.value = response.data.data || []
+    }
+  } catch (error) {
+    console.error('Alt izin türleri yüklenemedi:', error)
+  }
+}
+
+const handleLeaveTypeChange = async () => {
+  leaveRequestForm.value.leaveSubType = ''
+  if (selectedLeaveType.value?.isOtherCategory) {
+    await loadLeaveSubTypes()
+  }
+}
+
+const calculateLeaveDays = () => {
+  if (leaveRequestForm.value.startDate && leaveRequestForm.value.endDate) {
+    const start = new Date(leaveRequestForm.value.startDate)
+    const end = new Date(leaveRequestForm.value.endDate)
+    const diffTime = Math.abs(end - start)
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1
+    // Backend'de daha detaylı hesaplama yapılacak
+  }
+}
+
+const createLeaveRequest = async () => {
+  if (!employee.value?._id) {
+    alert('Çalışan bilgisi bulunamadı')
+    return
+  }
+
+  savingLeaveRequest.value = true
+  try {
+    const formData = new FormData()
+    formData.append('employee', employee.value._id)
+    formData.append('companyLeaveType', leaveRequestForm.value.companyLeaveType)
+    if (leaveRequestForm.value.leaveSubType) {
+      formData.append('leaveSubType', leaveRequestForm.value.leaveSubType)
+    }
+    formData.append('startDate', leaveRequestForm.value.startDate)
+    formData.append('endDate', leaveRequestForm.value.endDate)
+    if (leaveRequestForm.value.description) {
+      formData.append('description', leaveRequestForm.value.description)
+    }
+
+    await api.post('/leave-requests', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    })
+
+    alert('İzin talebi başarıyla oluşturuldu')
+    showLeaveRequestModal.value = false
+    leaveRequestForm.value = {
+      companyLeaveType: '',
+      leaveSubType: '',
+      startDate: '',
+      endDate: '',
+      description: ''
+    }
+    await loadLeaveRequests()
+  } catch (error) {
+    console.error('İzin talebi oluşturma hatası:', error)
+    alert(error.response?.data?.message || 'İzin talebi oluşturulamadı')
+  } finally {
+    savingLeaveRequest.value = false
+  }
+}
+
+const viewLeaveRequest = (request) => {
+  // Detay sayfasına yönlendir veya modal göster
+  router.push(`/leave-requests/${request._id}`)
+}
+
+onMounted(async () => {
+  // #region agent log
+  fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'EmployeeSettings.vue:onMounted',message:'onMounted entry',data:{routeId:route.params.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'M'})}).catch(()=>{});
+  // #endregion
+  await loadEmployee()
+  // #region agent log
+  fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'EmployeeSettings.vue:onMounted',message:'After loadEmployee',data:{hasEmployee:!!employee.value,employeeId:employee.value?._id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'M'})}).catch(()=>{});
+  // #endregion
+  await loadDepartments()
+  await loadEmployees()
   window.addEventListener('beforeunload', beforeUnload)
+  // #region agent log
+  fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'EmployeeSettings.vue:onMounted',message:'onMounted complete',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'M'})}).catch(()=>{});
+  // #endregion
 })
 
 onBeforeUnmount(() => {

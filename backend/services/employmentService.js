@@ -27,8 +27,13 @@ async function isExceptionSector(companyId) {
 
 /**
  * Tarihin resmi tatil olup olmadığını kontrol eder (şirket bazlı)
+ * DEVRE DIŞI: Tatil kontrolü şimdilik pasifleştirildi
  */
 async function checkHoliday(date, companyId) {
+  // Tatil kontrolü devre dışı - her zaman false döner
+  return false;
+  
+  /* ORİJİNAL KOD - YORUMDA:
   const checkDate = new Date(date);
   const year = checkDate.getFullYear();
   
@@ -49,15 +54,22 @@ async function checkHoliday(date, companyId) {
     const holidayStr = new Date(holiday).toISOString().split('T')[0];
     return holidayStr === checkDateStr;
   });
+  */
 }
 
 /**
  * Dün resmi tatil mi kontrol eder
+ * DEVRE DIŞI: Tatil kontrolü şimdilik pasifleştirildi
  */
 async function wasHolidayYesterday(date, companyId) {
+  // Tatil kontrolü devre dışı - her zaman false döner
+  return false;
+  
+  /* ORİJİNAL KOD - YORUMDA:
   const yesterday = new Date(date);
   yesterday.setDate(yesterday.getDate() - 1);
   return await checkHoliday(yesterday, companyId);
+  */
 }
 
 /**
@@ -84,24 +96,32 @@ async function validateHireDate(hireDate, companyId) {
   // Pazar kontrolü (Pazar her zaman tatil)
   const isSunday = hire.getDay() === 0;
   
-  // Tatil kontrolü
-  const isHoliday = await checkHoliday(hire, companyId);
-  const wasHolidayYesterday = await wasHolidayYesterday(hire, companyId);
+  // Tatil kontrolü - DEVRE DIŞI
+  // const isHoliday = await checkHoliday(hire, companyId);
+  // const wasHolidayYesterday = await wasHolidayYesterday(hire, companyId);
+  const isHoliday = false; // Tatil kontrolü devre dışı
+  const wasHolidayYesterday = false; // Tatil kontrolü devre dışı
   
-  // Geriye dönük kontrol (10 gün sınırı)
-  const diffDays = Math.floor((now - hire) / (1000 * 60 * 60 * 24));
-  if (diffDays > 10) {
-    warnings.push('Sgk Cezası Riski: Geriye Dönük Giriş');
+  // Geriye dönük kontrol - girişTarihi < bugün ise uyarı ver
+  if (hireDateStr < nowDateStr) {
+    warnings.push('SGK CEZASI RİSKİ: Geriye Dönük Giriş');
   }
   
   // Aynı gün giriş kuralları
   if (isToday) {
-    // Pazartesi veya tatil sonrası gün → Acil Kod
-    if (isMonday || wasHolidayYesterday) {
+    // Pazartesi veya tatil sonrası gün → Acil Kod (tatil kontrolü devre dışı)
+    // if (isMonday || wasHolidayYesterday) {
+    if (isMonday) { // Tatil kontrolü devre dışı, sadece Pazartesi kontrolü
       warnings.push('Acil Kodu: Tatil Sonrası İşlem');
     } else {
       // Normal iş günü → Ceza Riski
-      warnings.push('Sgk Cezası Riski: Aynı Güne Giriş');
+      warnings.push('SGK CEZASI RİSKİ: Aynı Güne Giriş');
+    }
+    
+    // Bugün için 13:00 sonrası kontrolü
+    const hour = now.getHours();
+    if (hour >= 13) {
+      warnings.push('Acil Kodu: 13:00 Sonrası İşlem');
     }
   }
   
@@ -118,22 +138,32 @@ async function validateHireDate(hireDate, companyId) {
 
 /**
  * İşten çıkış validasyonları
+ * Pazar günleri dahil geriye dönük tam 10. gün ve öncesi için uyarı verir
  */
 function validateTerminationDate(terminationDate) {
   const warnings = [];
   const now = new Date();
   const termination = new Date(terminationDate);
   
-  // Geriye dönük max 10 gün kontrolü
+  // Tarihleri sadece gün/ay/yıl olarak karşılaştır (saat bilgisi olmadan)
+  const nowDateStr = now.toISOString().split('T')[0];
+  const terminationDateStr = termination.toISOString().split('T')[0];
+  
+  // Geriye dönük max 10 gün kontrolü (pazar günleri dahil, tam 10. gün ve öncesi)
+  // Math.floor kullanarak gün farkını hesapla (pazar dahil tüm günler sayılır)
   const diffDays = Math.floor((now - termination) / (1000 * 60 * 60 * 24));
-  if (diffDays > 10) {
+  
+  // Tam 10. gün ve öncesi için uyarı (>= 10)
+  if (diffDays >= 10) {
     warnings.push('CEZA UYARISI: 10 günlük geriye dönük limit aşıldı.');
   }
   
-  // 13:00 sonrası kontrolü
-  const hour = now.getHours();
-  if (hour >= 13 && diffDays > 0) {
-    warnings.push('CEZA UYARISI: Ek süre aşımı.');
+  // 13:00 sonrası kontrolü (sadece geriye dönük tarihler için)
+  if (terminationDateStr < nowDateStr) {
+    const hour = now.getHours();
+    if (hour >= 13) {
+      warnings.push('CEZA UYARISI: Ek süre aşımı.');
+    }
   }
   
   return warnings;

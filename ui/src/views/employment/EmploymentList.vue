@@ -18,92 +18,80 @@
       </div>
     </div>
 
-    <div class="bg-white rounded-lg shadow overflow-hidden">
+    <!-- İşe Giriş İşlemleri -->
+    <div v-if="hireRecords.length > 0" class="bg-white rounded-lg shadow overflow-hidden mb-6">
+      <div class="bg-green-50 border-b border-green-200 px-6 py-3">
+        <h2 class="text-lg font-semibold text-green-800 flex items-center">
+          <span class="w-3 h-3 bg-green-600 rounded-full mr-2"></span>
+          İşe Giriş İşlemleri ({{ hireRecords.length }})
+        </h2>
+      </div>
       <table class="min-w-full divide-y divide-gray-200">
-        <thead class="bg-gray-50">
+        <thead class="bg-green-50">
           <tr>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              İşlem Tipi
+            <th class="px-6 py-3 text-left text-xs font-medium text-green-700 uppercase tracking-wider">
+              AD SOYAD
             </th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Aday / Çalışan
+            <th class="px-6 py-3 text-left text-xs font-medium text-green-700 uppercase tracking-wider">
+              TCKN
             </th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Ücret
+            <th class="px-6 py-3 text-left text-xs font-medium text-green-700 uppercase tracking-wider">
+              TARİH
             </th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Sözleşme Tipi
+            <th class="px-6 py-3 text-left text-xs font-medium text-green-700 uppercase tracking-wider">
+              DURUM
             </th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Statü
-            </th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Onaya Gönderilme
-            </th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Onaylanma / Red
-            </th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              İşlemler
+            <th class="px-6 py-3 text-left text-xs font-medium text-green-700 uppercase tracking-wider">
+              İŞLEM
             </th>
           </tr>
         </thead>
         <tbody class="bg-white divide-y divide-gray-200">
-          <tr v-for="record in preRecords" :key="record._id">
-            <td class="px-6 py-4 whitespace-nowrap">
-              <span :class="record.processType === 'hire' ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800'" class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full">
-                {{ record.processType === 'hire' ? 'İşe Giriş' : 'İşten Çıkış' }}
-              </span>
-            </td>
+          <tr v-for="record in hireRecords" :key="record._id" class="hover:bg-green-50">
             <td class="px-6 py-4 whitespace-nowrap">
               <div class="text-sm font-medium text-gray-900">
-                {{ record.processType === 'hire' ? record.candidateFullName : (record.employeeId?.firstName + ' ' + record.employeeId?.lastName) }}
-              </div>
-              <div class="text-sm text-gray-500">
-                {{ record.processType === 'hire' ? `TC: ${record.tcKimlikNo}` : (record.employeeId?.employeeNumber ? `#${record.employeeId.employeeNumber}` : '') }}
+                {{ record.candidateFullName || '-' }}
               </div>
             </td>
             <td class="px-6 py-4 whitespace-nowrap">
-              <div v-if="record.processType === 'hire'" class="text-sm text-gray-900">
-                {{ formatCurrency(record.ucret) }}
+              <div class="text-sm text-gray-900">
+                {{ record.tcKimlikNo || '-' }}
               </div>
-              <div v-else class="text-sm text-gray-500">—</div>
             </td>
             <td class="px-6 py-4 whitespace-nowrap">
-              <div v-if="record.processType === 'hire'" class="text-sm text-gray-900">
-                {{ getContractTypeLabel(record.contractType) }}
+              <div class="text-sm text-gray-900">
+                {{ formatDate(record.hireDate) }}
               </div>
-              <div v-else class="text-sm text-gray-500">—</div>
             </td>
             <td class="px-6 py-4 whitespace-nowrap">
               <span :class="getStatusClass(record.status)" class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full">
                 {{ getStatusLabel(record.status) }}
               </span>
             </td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-              {{ formatDateTime(record.pendingDate || record.createdAt) }}
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-              <div v-if="record.status === 'APPROVED'">
-                {{ formatDateTime(record.approvedAt) }}
-              </div>
-              <div v-else-if="record.status === 'REJECTED'" class="text-red-600">
-                {{ formatDateTime(record.rejectedAt) }}
-                <div class="text-xs text-gray-500 mt-1">{{ record.rejectionReason }}</div>
-              </div>
-              <div v-else>—</div>
-            </td>
             <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
               <div class="flex gap-2">
                 <button
-                  v-if="['PENDING_COMPANY_APPROVAL', 'PENDING_DEALER_APPROVAL'].includes(record.status) && canApprove"
+                  @click="viewRecord(record._id)"
+                  class="text-blue-600 hover:text-blue-900"
+                >
+                  Görüntüle
+                </button>
+                <button
+                  v-if="canEdit(record)"
+                  @click="editRecord(record._id)"
+                  class="text-green-600 hover:text-green-900"
+                >
+                  Düzenle
+                </button>
+                <button
+                  v-if="['PENDING_APPROVAL', 'PENDING_COMPANY_APPROVAL', 'PENDING_DEALER_APPROVAL'].includes(record.status) && canApprove"
                   @click="approveRecord(record._id)"
                   class="text-green-600 hover:text-green-900"
                 >
                   Onayla
                 </button>
                 <button
-                  v-if="['PENDING_COMPANY_APPROVAL', 'PENDING_DEALER_APPROVAL'].includes(record.status) && canReject"
+                  v-if="['PENDING_APPROVAL', 'PENDING_COMPANY_APPROVAL', 'PENDING_DEALER_APPROVAL'].includes(record.status) && canReject"
                   @click="showRejectModal(record)"
                   class="text-red-600 hover:text-red-900"
                 >
@@ -114,10 +102,97 @@
           </tr>
         </tbody>
       </table>
+    </div>
 
-      <div v-if="preRecords.length === 0" class="text-center py-12">
-        <p class="text-gray-500">Henüz işe giriş/çıkış işlem kaydı bulunmamaktadır.</p>
+    <!-- İşten Çıkış İşlemleri -->
+    <div v-if="terminationRecords.length > 0" class="bg-white rounded-lg shadow overflow-hidden">
+      <div class="bg-red-50 border-b border-red-200 px-6 py-3">
+        <h2 class="text-lg font-semibold text-red-800 flex items-center">
+          <span class="w-3 h-3 bg-red-600 rounded-full mr-2"></span>
+          İşten Çıkış İşlemleri ({{ terminationRecords.length }})
+        </h2>
       </div>
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-red-50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-medium text-red-700 uppercase tracking-wider">
+              AD SOYAD
+            </th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-red-700 uppercase tracking-wider">
+              TCKN
+            </th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-red-700 uppercase tracking-wider">
+              TARİH
+            </th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-red-700 uppercase tracking-wider">
+              DURUM
+            </th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-red-700 uppercase tracking-wider">
+              İŞLEM
+            </th>
+          </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+          <tr v-for="record in terminationRecords" :key="record._id" class="hover:bg-red-50">
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div class="text-sm font-medium text-gray-900">
+                {{ record.employeeId ? `${record.employeeId.firstName || ''} ${record.employeeId.lastName || ''}`.trim() : '-' }}
+              </div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div class="text-sm text-gray-900">
+                {{ record.employeeId ? record.employeeId.tcKimlik || '-' : '-' }}
+              </div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div class="text-sm text-gray-900">
+                {{ formatDate(record.terminationDate) }}
+              </div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <span :class="getStatusClass(record.status)" class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full">
+                {{ getStatusLabel(record.status) }}
+              </span>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+              <div class="flex gap-2">
+                <button
+                  @click="viewRecord(record._id)"
+                  class="text-blue-600 hover:text-blue-900"
+                >
+                  Görüntüle
+                </button>
+                <button
+                  v-if="canEdit(record)"
+                  @click="editRecord(record._id)"
+                  class="text-green-600 hover:text-green-900"
+                >
+                  Düzenle
+                </button>
+                <button
+                  v-if="['PENDING_APPROVAL', 'PENDING_COMPANY_APPROVAL', 'PENDING_DEALER_APPROVAL'].includes(record.status) && canApprove"
+                  @click="approveRecord(record._id)"
+                  class="text-green-600 hover:text-green-900"
+                >
+                  Onayla
+                </button>
+                <button
+                  v-if="['PENDING_APPROVAL', 'PENDING_COMPANY_APPROVAL', 'PENDING_DEALER_APPROVAL'].includes(record.status) && canReject"
+                  @click="showRejectModal(record)"
+                  class="text-red-600 hover:text-red-900"
+                >
+                  Reddet
+                </button>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Boş Durum -->
+    <div v-if="preRecords.length === 0" class="bg-white rounded-lg shadow text-center py-12">
+      <p class="text-gray-500">Henüz işe giriş/çıkış işlem kaydı bulunmamaktadır.</p>
     </div>
 
     <!-- Reddetme Modal -->
@@ -169,6 +244,15 @@ const showRejectDialog = ref(false)
 const rejectReason = ref('')
 const selectedRecord = ref(null)
 
+// Giriş ve çıkış kayıtlarını ayır
+const hireRecords = computed(() => {
+  return preRecords.value.filter(record => record.processType === 'hire')
+})
+
+const terminationRecords = computed(() => {
+  return preRecords.value.filter(record => record.processType === 'termination')
+})
+
 const canApprove = computed(() => {
   const role = authStore.user?.role
   return ['company_admin', 'resmi_muhasebe_ik', 'super_admin', 'bayi_admin'].includes(role)
@@ -209,31 +293,90 @@ const getContractTypeLabel = (type) => {
 
 const getStatusLabel = (status) => {
   const labels = {
-    'PENDING_COMPANY_APPROVAL': 'Şirket Onayı Bekliyor',
-    'PENDING_DEALER_APPROVAL': 'Bayi Onayı Bekliyor',
-    'APPROVED': 'Onaylandı',
-    'REJECTED': 'Reddedildi'
+    'PENDING_APPROVAL': 'PENDING',
+    'PENDING_COMPANY_APPROVAL': 'PENDING',
+    'PENDING_DEALER_APPROVAL': 'PENDING',
+    'APPROVED': 'ONAYLANDI',
+    'REJECTED': 'Reddedildi',
+    'ASKIDA': 'ASKIDA',
+    'IPTAL': 'IPTAL'
   }
   return labels[status] || status
 }
 
 const getStatusClass = (status) => {
   const classes = {
+    'PENDING_APPROVAL': 'bg-yellow-100 text-yellow-800',
     'PENDING_COMPANY_APPROVAL': 'bg-yellow-100 text-yellow-800',
     'PENDING_DEALER_APPROVAL': 'bg-orange-100 text-orange-800',
     'APPROVED': 'bg-green-100 text-green-800',
-    'REJECTED': 'bg-red-100 text-red-800'
+    'REJECTED': 'bg-red-100 text-red-800',
+    'ASKIDA': 'bg-gray-100 text-gray-800',
+    'IPTAL': 'bg-red-100 text-red-800'
   }
   return classes[status] || 'bg-gray-100 text-gray-800'
 }
 
+const formatPhone = (phone) => {
+  if (!phone) return '—'
+  const clean = phone.replace(/\D/g, '')
+  if (clean.length === 11) {
+    return clean.replace(/(\d{1})(\d{3})(\d{3})(\d{2})(\d{2})/, '$1 $2 $3 $4 $5')
+  }
+  return phone
+}
+
+const formatDate = (date) => {
+  if (!date) return '—'
+  const d = new Date(date)
+  const day = String(d.getDate()).padStart(2, '0')
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const year = d.getFullYear()
+  return `${day}.${month}.${year}`
+}
+
+const getSalaryTypeLabel = (companyId) => {
+  // Şirket ayarlarından alınabilir, şimdilik varsayılan NET
+  if (!companyId) return 'NET'
+  if (typeof companyId === 'object' && companyId.payrollCalculationType) {
+    return companyId.payrollCalculationType === 'BRUT' ? 'BRUT' : 'NET'
+  }
+  return 'NET'
+}
+
+const canEdit = (record) => {
+  const role = authStore.user?.role
+  // Şirket Admin, Süper Admin ve Bayi Admin düzenleyebilir
+  return ['company_admin', 'super_admin', 'bayi_admin'].includes(role) && 
+         ['PENDING_APPROVAL', 'ASKIDA'].includes(record.status)
+}
+
+const viewRecord = (id) => {
+  // Detay sayfasına yönlendir (ileride implement edilebilir)
+  console.log('Görüntüle:', id)
+}
+
+const editRecord = (id) => {
+  // Düzenleme sayfasına yönlendir (ileride implement edilebilir)
+  console.log('Düzenle:', id)
+}
+
 const loadPreRecords = async () => {
   try {
-    const response = await api.get('/employment')
-    preRecords.value = response.data.data || []
+    // Tüm kayıtları getir (GIRIS ve CIKIS)
+    const response = await api.get('/employment/list')
+    
+    if (response.data && response.data.success) {
+      preRecords.value = response.data.data || []
+    } else {
+      preRecords.value = []
+      console.error('İşlem kayıtları yüklenemedi: Başarısız yanıt')
+    }
   } catch (error) {
     console.error('İşlem kayıtları yüklenemedi:', error)
-    alert('İşlem kayıtları yüklenemedi')
+    const errorMessage = error.response?.data?.message || error.message || 'İşlem kayıtları yüklenemedi'
+    alert(errorMessage)
+    preRecords.value = []
   }
 }
 

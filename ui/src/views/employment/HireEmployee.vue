@@ -29,8 +29,8 @@
               Adı Soyadı <span class="text-red-500">*</span>
             </label>
             <input
-              v-model="form.candidateFullName"
-              @blur="formatFullName"
+              v-model="form.fullName"
+              @keyup="formatFullName"
               type="text"
               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="Adı Soyadı"
@@ -47,7 +47,7 @@
               TC Kimlik No <span class="text-red-500">*</span>
             </label>
             <input
-              v-model="form.tcKimlik"
+              v-model="form.tckn"
               @input="formatTCKimlik"
               type="text"
               maxlength="11"
@@ -55,7 +55,7 @@
               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               required
             />
-            <p v-if="form.tcKimlik && form.tcKimlik.replace(/\D/g, '').length !== 11" class="mt-1 text-xs text-red-600">
+            <p v-if="form.tckn && form.tckn.replace(/\D/g, '').length !== 11" class="mt-1 text-xs text-red-600">
               TC Kimlik No 11 Haneli Olmalıdır
             </p>
           </div>
@@ -76,10 +76,10 @@
               </a>
             </div>
             <input
-              v-model="form.position"
+              v-model="form.sgkJobCode"
               type="text"
               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Görevi (Mesleği) Giriniz"
+              placeholder="Görevi (SGK Meslek Kodu) Giriniz"
               required
             />
             <p class="mt-1 text-xs text-gray-500">
@@ -136,10 +136,10 @@
             />
           </div>
 
-          <!-- Telefon (Opsiyonel) -->
+          <!-- Telefon (Zorunlu) -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">
-              Telefon
+              Telefon <span class="text-red-500">*</span>
             </label>
             <input
               v-model="form.phone"
@@ -148,7 +148,11 @@
               maxlength="15"
               placeholder="0 555 555 55 55"
               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
             />
+            <p class="mt-1 text-xs text-gray-500">
+              Format: 0 555 555 55 55
+            </p>
           </div>
 
           <!-- Ücret Miktarı (Opsiyonel) -->
@@ -181,7 +185,7 @@
               Sözleşme Tipi <span class="text-red-500">*</span>
             </label>
             <select
-              v-model="form.contractType"
+              v-model="form.employmentType"
               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               required
             >
@@ -197,7 +201,7 @@
               İşe Giriş Tarihi <span class="text-red-500">*</span>
             </label>
             <input
-              v-model="form.hireDate"
+              v-model="form.startDate"
               @change="checkWarnings"
               type="date"
               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -267,16 +271,16 @@ const isBayiAdmin = computed(() => authStore.user?.role === 'bayi_admin')
 
 const form = ref({
   companyId: '',
-  candidateFullName: '', // Ad Soyad tek alan olarak
-  tcKimlik: '',
-  position: '',
+  fullName: '', // Ad Soyad tek alan olarak
+  tckn: '',
+  sgkJobCode: '',
   email: '',
   phone: '',
   workplaceId: '',
   sectionId: '',
   salaryAmount: '',
-  contractType: 'BELİRSİZ_SÜRELİ',
-  hireDate: ''
+  employmentType: 'BELİRSİZ_SÜRELİ',
+  startDate: ''
 })
 
 const companyPayrollType = ref(null)
@@ -284,7 +288,7 @@ const companyPayrollType = ref(null)
 const formatTCKimlik = (event) => {
   let value = event.target.value.replace(/\D/g, '')
   if (value.length > 11) value = value.substring(0, 11)
-  form.value.tcKimlik = value
+  form.value.tckn = value
 }
 
 const formatPhone = (event) => {
@@ -300,10 +304,10 @@ const formatPhone = (event) => {
   form.value.phone = value
 }
 
-// Ad Soyad'ı büyük harfe çevir
+// Ad Soyad'ı büyük harfe çevir (keyup event)
 const formatFullName = () => {
-  if (form.value.candidateFullName) {
-    form.value.candidateFullName = form.value.candidateFullName.trim().toUpperCase()
+  if (form.value.fullName) {
+    form.value.fullName = form.value.fullName.trim().toUpperCase()
   }
 }
 
@@ -384,14 +388,14 @@ const checkWarnings = async () => {
   warnings.value = []
   isExceptionSector.value = false
   
-  if (!form.value.hireDate || !form.value.companyId) {
+  if (!form.value.startDate || !form.value.companyId) {
     return
   }
   
   try {
     // Backend'den uyarıları al
     const response = await api.post('/employment/validate-hire-date', {
-      hireDate: form.value.hireDate,
+      hireDate: form.value.startDate,
       companyId: form.value.companyId
     })
     
@@ -415,81 +419,130 @@ const checkWarnings = async () => {
 }
 
 const handleSubmit = async () => {
-  // Ad Soyad'ı büyük harfe çevir
-  if (form.value.candidateFullName) {
-    form.value.candidateFullName = form.value.candidateFullName.trim().toUpperCase()
-  }
-  
-  // Validasyon - Zorunlu alanlar
-  if (!form.value.companyId) {
-    alert('Şirket Seçimi Zorunludur.')
-    return
-  }
-  
-  if (!form.value.hireDate) {
-    alert('İşe Giriş Tarihi Zorunludur.')
-    return
-  }
-  
-  if (!form.value.candidateFullName) {
-    alert('Adı Soyadı Zorunludur.')
-    return
-  }
-  
-  if (!form.value.tcKimlik) {
-    alert('TC Kimlik No Zorunludur.')
-    return
-  }
-  
-  if (form.value.tcKimlik.replace(/\D/g, '').length !== 11) {
-    alert('TC Kimlik No 11 Haneli Olmalıdır.')
-    return
-  }
-  
-  if (!form.value.position) {
-    alert('Görevi (SGK Meslek Kodu) Zorunludur.')
-    return
-  }
-  
-  // İşyeri kontrolü - Sadece birden fazla işyeri varsa zorunlu
-  if (workplaces.value.length > 1 && !form.value.workplaceId) {
-    alert('Birden Fazla İşyeri Bulundu. Lütfen Seçim Yapınız.')
-    return
-  }
-
-  saving.value = true
   try {
-    // İşe giriş ön-kaydı oluştur (Employee oluşturulmayacak)
-    const MINIMUM_WAGE = 17002.00
-    const finalUcret = form.value.salaryAmount ? parseFloat(form.value.salaryAmount) : MINIMUM_WAGE
+    // Ad Soyad'ı büyük harfe çevir
+    if (form.value.fullName) {
+      form.value.fullName = form.value.fullName.trim().toUpperCase()
+    }
     
-    const employmentData = {
-      candidateFullName: form.value.candidateFullName.trim().toUpperCase(), // Büyük harfe çevir
-      tcKimlikNo: form.value.tcKimlik.replace(/\D/g, ''),
-      email: form.value.email || null,
-      phone: form.value.phone || null,
+    // Tüm değişkenleri console.log ile kontrol et
+    console.log('Form Data:', {
       companyId: form.value.companyId,
-      workplaceId: form.value.workplaceId || null, // Opsiyonel - backend otomatik atayacak
-      sectionId: form.value.sectionId || null,
-      departmentId: null, // İleride eklenebilir
-      hireDate: form.value.hireDate,
-      sgkMeslekKodu: form.value.position,
-      ucret: finalUcret,
-      contractType: form.value.contractType || 'BELİRSİZ_SÜRELİ'
+      fullName: form.value.fullName,
+      tckn: form.value.tckn,
+      sgkJobCode: form.value.sgkJobCode,
+      email: form.value.email,
+      phone: form.value.phone,
+      salaryAmount: form.value.salaryAmount,
+      employmentType: form.value.employmentType,
+      startDate: form.value.startDate
+    })
+    
+    // Validasyon - Zorunlu alanlar
+    if (!form.value.companyId) {
+      alert('Şirket Seçimi Zorunludur.')
+      return
+    }
+    
+    if (!form.value.startDate) {
+      alert('İşe Giriş Tarihi Zorunludur.')
+      return
+    }
+    
+    if (!form.value.fullName || form.value.fullName.trim() === '') {
+      alert('Adı Soyadı Zorunludur.')
+      return
+    }
+    
+    if (!form.value.tckn || form.value.tckn.trim() === '') {
+      alert('TC Kimlik No Zorunludur.')
+      return
+    }
+    
+    const cleanTCKN = (form.value.tckn || '').replace(/\D/g, '')
+    if (cleanTCKN.length !== 11 || !/^\d+$/.test(cleanTCKN)) {
+      alert('TC Kimlik No 11 Haneli Olmalıdır.')
+      return
+    }
+    
+    if (!form.value.sgkJobCode || form.value.sgkJobCode.trim() === '') {
+      alert('Görevi (SGK Meslek Kodu) Zorunludur.')
+      return
     }
 
-    const response = await api.post('/employment/hire', employmentData)
+    if (!form.value.phone || form.value.phone.trim() === '') {
+      alert('Telefon Zorunludur.')
+      return
+    }
+
+    // Telefon formatı kontrolü
+    const cleanPhone = (form.value.phone || '').replace(/\D/g, '')
+    if (cleanPhone.length !== 11 || !cleanPhone.startsWith('0')) {
+      alert('Telefon Numarası 11 Haneli ve 0 ile Başlamalıdır')
+      return
+    }
+
+    saving.value = true
     
-    if (response.data.success) {
+    // Default değerler - eksik alanlar için
+    const employmentData = {
+      type: 'GIRIS', // İşe giriş
+      fullName: (form.value.fullName || '').trim().toUpperCase(),
+      tckn: cleanTCKN,
+      sgkJobCode: (form.value.sgkJobCode || '').trim(),
+      jobName: null, // Görevi (Meslek) alanı kaldırıldı
+      email: (form.value.email || '').trim() || null,
+      phone: cleanPhone,
+      salaryAmount: form.value.salaryAmount ? parseFloat(form.value.salaryAmount) : null,
+      salaryType: companyPayrollType.value || 'NET',
+      employmentType: form.value.employmentType || 'BELİRSİZ_SÜRELİ',
+      startDate: form.value.startDate,
+      exitDate: null, // İşe giriş için null
+      companyId: form.value.companyId
+    }
+
+    console.log('Sending Data:', employmentData)
+
+    // Yeni endpoint: POST /employment/create
+    const response = await api.post('/employment/create', employmentData)
+    
+    if (response.data && response.data.success) {
       // Uyarılar varsa göster
-      if (response.data.data.warnings && response.data.data.warnings.length > 0) {
+      if (response.data.data && response.data.data.warnings && response.data.data.warnings.length > 0) {
         alert('Uyarılar:\n' + response.data.data.warnings.join('\n'))
       }
       // Liste sayfasına yönlendir
       await router.push('/employment/list')
+    } else {
+      alert('İşlem başarısız oldu')
     }
   } catch (error) {
-    alert(error.response?.data?.message || 'Hata oluştu')
+    console.error('İşe giriş hatası:', error)
+    console.error('Error response:', error.response?.data)
+    console.error('Error status:', error.response?.status)
+    
+    // Daha açıklayıcı hata mesajı
+    let errorMessage = 'Hata oluştu'
+    
+    if (error.response?.data) {
+      // Backend'den gelen hata mesajı
+      if (error.response.data.message) {
+        errorMessage = error.response.data.message
+      }
+      // Eğer error field'ı varsa onu da ekle
+      if (error.response.data.error) {
+        errorMessage += '\n' + error.response.data.error
+      }
+    } else if (error.message) {
+      errorMessage = error.message
+    }
+    
+    // Network hatası kontrolü
+    if (!error.response) {
+      errorMessage = 'Sunucuya bağlanılamadı. Lütfen internet bağlantınızı kontrol edin.'
+    }
+    
+    alert(errorMessage)
   } finally {
     saving.value = false
   }

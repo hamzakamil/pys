@@ -68,6 +68,7 @@
               </td>
               <td class="px-4 py-4 whitespace-nowrap text-sm font-medium">
                 <button @click="editEmployee(employee)" class="text-indigo-600 hover:text-indigo-900 mr-4">Düzenle</button>
+                <button @click="showLeaveRequestModal(employee)" class="text-green-600 hover:text-green-900 mr-4">İzin Talebi Ekle</button>
                 <button @click="deleteEmployee(employee._id)" class="text-red-600 hover:text-red-900">Sil</button>
               </td>
             </tr>
@@ -315,6 +316,83 @@
       </div>
     </div>
 
+    <!-- Leave Request Modal -->
+    <div v-if="showLeaveRequestModalFlag" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
+      <div class="bg-white rounded-lg p-6 w-full max-w-2xl my-8">
+        <h2 class="text-xl font-bold mb-4">İzin Talebi Ekle - {{ selectedEmployeeForLeave ? `${selectedEmployeeForLeave.firstName} ${selectedEmployeeForLeave.lastName}` : '' }}</h2>
+        <form @submit.prevent="saveLeaveRequest">
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">İzin Türü <span class="text-red-500">*</span></label>
+              <select
+                v-model="leaveRequestForm.companyLeaveType"
+                @change="handleLeaveTypeChange"
+                required
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Seçiniz</option>
+                <option v-for="type in leaveTypes" :key="type._id" :value="type._id">
+                  {{ type.name }}
+                </option>
+              </select>
+            </div>
+            
+            <!-- Alt izin türü -->
+            <div v-if="selectedLeaveType?.isOtherCategory && filteredLeaveSubTypes.length > 0">
+              <label class="block text-sm font-medium text-gray-700 mb-1">Alt İzin Türü <span class="text-red-500">*</span></label>
+              <select
+                v-model="leaveRequestForm.leaveSubType"
+                required
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Seçiniz</option>
+                <option v-for="subType in filteredLeaveSubTypes" :key="subType._id" :value="subType._id">
+                  {{ subType.name }}
+                </option>
+              </select>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Başlangıç Tarihi <span class="text-red-500">*</span></label>
+                <input
+                  v-model="leaveRequestForm.startDate"
+                  type="date"
+                  required
+                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Bitiş Tarihi <span class="text-red-500">*</span></label>
+                <input
+                  v-model="leaveRequestForm.endDate"
+                  type="date"
+                  required
+                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Açıklama</label>
+              <textarea
+                v-model="leaveRequestForm.description"
+                rows="3"
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              ></textarea>
+            </div>
+
+            <div class="flex gap-2 justify-end">
+              <Button type="button" variant="secondary" @click="closeLeaveRequestModal">İptal</Button>
+              <Button type="submit" :disabled="savingLeaveRequest">
+                {{ savingLeaveRequest ? 'Kaydediliyor...' : 'Kaydet' }}
+              </Button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <!-- Import Modal -->
     <div v-if="showImportModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
       <div class="bg-white rounded-lg p-6 w-full max-w-2xl my-8">
@@ -400,6 +478,18 @@ const importFile = ref(null)
 const importCompany = ref('')
 const sendingActivation = ref(null)
 const sendingBulkActivation = ref(false)
+const showLeaveRequestModalFlag = ref(false)
+const selectedEmployeeForLeave = ref(null)
+const savingLeaveRequest = ref(false)
+const leaveTypes = ref([])
+const leaveSubTypes = ref([])
+const leaveRequestForm = ref({
+  companyLeaveType: '',
+  leaveSubType: '',
+  startDate: '',
+  endDate: '',
+  description: ''
+})
 const form = ref({
   firstName: '',
   lastName: '',
@@ -595,6 +685,21 @@ const availableManagers = computed(() => {
   })
 })
 
+// İzin talebi için computed properties
+const selectedLeaveType = computed(() => {
+  return leaveTypes.value.find(t => t._id === leaveRequestForm.value.companyLeaveType)
+})
+
+const filteredLeaveSubTypes = computed(() => {
+  if (!selectedLeaveType.value?.isOtherCategory) {
+    return []
+  }
+  return leaveSubTypes.value.filter(st => 
+    st.parentLeaveType && 
+    st.parentLeaveType.toString() === selectedLeaveType.value._id.toString()
+  )
+})
+
 const loadCompanies = async () => {
   if (isSuperAdmin.value || isBayiAdmin.value) {
     try {
@@ -744,6 +849,111 @@ const saveEmployee = async () => {
 const editEmployee = (employee) => {
   // Personel ayarları sayfasına yönlendir
   router.push(`/employee-settings/${employee._id}`)
+}
+
+const showLeaveRequestModal = async (employee) => {
+  selectedEmployeeForLeave.value = employee
+  showLeaveRequestModalFlag.value = true
+  await loadLeaveTypes()
+  // Şirket seçilmişse alt izin türlerini yükle
+  if (employee.company?._id || employee.company) {
+    await loadLeaveSubTypes(employee.company?._id || employee.company)
+  }
+}
+
+const closeLeaveRequestModal = () => {
+  showLeaveRequestModalFlag.value = false
+  selectedEmployeeForLeave.value = null
+  leaveRequestForm.value = {
+    companyLeaveType: '',
+    leaveSubType: '',
+    startDate: '',
+    endDate: '',
+    description: ''
+  }
+}
+
+const loadLeaveTypes = async () => {
+  try {
+    const response = await api.get('/leave-types')
+    if (response.data.success) {
+      leaveTypes.value = response.data.data || []
+    }
+  } catch (error) {
+    console.error('İzin türleri yüklenemedi:', error)
+  }
+}
+
+const loadLeaveSubTypes = async (companyId) => {
+  try {
+    const params = {}
+    if (selectedLeaveType.value?.isOtherCategory && selectedLeaveType.value._id) {
+      params.parentLeaveType = selectedLeaveType.value._id
+    }
+    if (companyId) {
+      params.companyId = companyId
+    } else if (authStore.user?.company) {
+      params.companyId = authStore.user.company
+    }
+    const response = await api.get('/leave-types/sub-types', { params })
+    if (response.data.success) {
+      leaveSubTypes.value = response.data.data || []
+    }
+  } catch (error) {
+    console.error('Alt izin türleri yüklenemedi:', error)
+  }
+}
+
+const handleLeaveTypeChange = async () => {
+  if (!selectedLeaveType.value?.isOtherCategory) {
+    leaveRequestForm.value.leaveSubType = ''
+    leaveSubTypes.value = []
+  } else {
+    const companyId = selectedEmployeeForLeave.value?.company?._id || selectedEmployeeForLeave.value?.company
+    await loadLeaveSubTypes(companyId)
+  }
+}
+
+const saveLeaveRequest = async () => {
+  if (!selectedEmployeeForLeave.value) {
+    alert('Çalışan seçilmedi')
+    return
+  }
+
+  // Diğer kategorisi seçildiyse alt izin türü zorunlu
+  if (selectedLeaveType.value?.isOtherCategory && !leaveRequestForm.value.leaveSubType) {
+    alert('Alt izin türü seçilmelidir')
+    return
+  }
+
+  savingLeaveRequest.value = true
+  try {
+    const formData = new FormData()
+    formData.append('employee', selectedEmployeeForLeave.value._id)
+    formData.append('companyLeaveType', leaveRequestForm.value.companyLeaveType)
+    if (leaveRequestForm.value.leaveSubType) {
+      formData.append('leaveSubType', leaveRequestForm.value.leaveSubType)
+    }
+    formData.append('startDate', leaveRequestForm.value.startDate)
+    formData.append('endDate', leaveRequestForm.value.endDate)
+    if (leaveRequestForm.value.description) {
+      formData.append('description', leaveRequestForm.value.description)
+    }
+
+    await api.post('/leave-requests', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    })
+
+    alert('İzin talebi başarıyla oluşturuldu')
+    closeLeaveRequestModal()
+  } catch (error) {
+    console.error('İzin talebi oluşturma hatası:', error)
+    alert(error.response?.data?.message || 'İzin talebi oluşturulamadı')
+  } finally {
+    savingLeaveRequest.value = false
+  }
 }
 
 const deleteEmployee = async (id) => {

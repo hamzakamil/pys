@@ -52,6 +52,7 @@
             </label>
             <input
               v-model="form.terminationDate"
+              @change="checkWarnings"
               type="date"
               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               required
@@ -180,9 +181,11 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import api from '@/services/api'
 
+const router = useRouter()
 const authStore = useAuthStore()
 const companies = ref([])
 const employees = ref([])
@@ -291,30 +294,41 @@ const calculateSeverance = async () => {
   }
 }
 
-const checkWarnings = () => {
+const checkWarnings = async () => {
   warnings.value = []
   
   if (!form.value.terminationDate) {
     return
   }
   
-  const now = new Date()
-  const termination = new Date(form.value.terminationDate)
-  const diffDays = Math.floor((now - termination) / (1000 * 60 * 60 * 24))
-  
-  if (diffDays > 10) {
-    warnings.value.push('CEZA UYARISI: 10 günlük geriye dönük limit aşıldı.')
-  }
-  
-  const hour = now.getHours()
-  if (hour >= 13 && diffDays > 0) {
-    warnings.value.push('CEZA UYARISI: Ek süre aşımı.')
+  try {
+    // Backend'den uyarıları al
+    const response = await api.post('/employment/validate-termination-date', {
+      terminationDate: form.value.terminationDate
+    })
+    
+    if (response.data.success) {
+      warnings.value = response.data.warnings || []
+    }
+  } catch (error) {
+    console.error('Uyarı kontrolü hatası:', error)
+    // Hata durumunda sessizce devam et
   }
 }
 
 const handleSubmit = async () => {
+  // #region agent log
+  fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'TerminateEmployee.vue:handleSubmit-entry',message:'handleSubmit entry',data:{form:form.value},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+  // #endregion
+  
   saving.value = true
   try {
+    // Validasyon
+    if (!form.value.employeeId || !form.value.companyId || !form.value.terminationDate || !form.value.terminationReason) {
+      alert('Tüm zorunlu alanlar doldurulmalıdır')
+      return
+    }
+    
     const formData = new FormData()
     formData.append('employeeId', form.value.employeeId)
     formData.append('companyId', form.value.companyId)
@@ -326,21 +340,37 @@ const handleSubmit = async () => {
       formData.append('resignationPhoto', resignationFile.value)
     }
     
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'TerminateEmployee.vue:handleSubmit-before-api',message:'Before API call',data:{employeeId:form.value.employeeId,companyId:form.value.companyId,terminationDate:form.value.terminationDate,terminationReason:form.value.terminationReason,hasFile:!!resignationFile.value},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
+    
     const response = await api.post('/employment/terminate', formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       }
     })
     
-    if (response.data.success) {
-      alert('İşten Çıkış Kaydı Başarıyla Oluşturuldu Ve Onaya Gönderildi')
-      if (response.data.data.warnings && response.data.data.warnings.length > 0) {
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'TerminateEmployee.vue:handleSubmit-success',message:'API call success',data:{success:response.data?.success,message:response.data?.message,hasWarnings:!!response.data?.data?.warnings},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+    // #endregion
+    
+    if (response.data && response.data.success) {
+      // Uyarılar varsa göster
+      if (response.data.data && response.data.data.warnings && response.data.data.warnings.length > 0) {
         alert('Uyarılar:\n' + response.data.data.warnings.join('\n'))
       }
-      window.location.href = '/employment/list'
+      // Liste sayfasına yönlendir
+      await router.push('/employment/list')
+    } else {
+      alert('İşlem başarısız oldu')
     }
   } catch (error) {
-    alert(error.response?.data?.message || 'Hata Oluştu')
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'TerminateEmployee.vue:handleSubmit-error',message:'API call error',data:{error:error.message,response:error.response?.data},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+    // #endregion
+    console.error('İşten çıkış hatası:', error)
+    const errorMessage = error.response?.data?.message || error.response?.data?.error || error.message || 'Hata Oluştu'
+    alert(errorMessage)
   } finally {
     saving.value = false
   }
@@ -360,10 +390,12 @@ onMounted(async () => {
   }
   
   // Tarih değişikliklerini dinle
-  const terminationDateInput = document.querySelector('input[type="date"]')
-  if (terminationDateInput) {
-    terminationDateInput.addEventListener('change', checkWarnings)
-  }
+  setTimeout(() => {
+    const terminationDateInput = document.querySelector('input[type="date"]')
+    if (terminationDateInput) {
+      terminationDateInput.addEventListener('change', checkWarnings)
+    }
+  }, 100)
 })
 </script>
 

@@ -33,18 +33,47 @@ const upload = multer({
 
 // Get all leave requests
 router.get('/', auth, async (req, res) => {
+  // #region agent log
+  const fs = require('fs');
+  const path = require('path');
+  const logPath = path.join(__dirname, '../../.cursor/debug.log');
+  try {
+    fs.appendFileSync(logPath, JSON.stringify({location:'leaveRequests.js:35',message:'GET /leave-requests entry',data:{query:req.query,userRole:req.user?.role?.name,userId:req.user?._id?.toString()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})+'\n');
+  } catch(e){}
+  // #endregion
   try {
     let query = {};
     const { status, employee, company, startDate, endDate } = req.query;
 
+    // #region agent log
+    try {
+      fs.appendFileSync(logPath, JSON.stringify({location:'leaveRequests.js:42',message:'Query params parsed',data:{status,employee,company,startDate,endDate,userRole:req.user?.role?.name},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');
+    } catch(e){}
+    // #endregion
+
     if (employee) {
       query.employee = employee;
+      // #region agent log
+      try {
+        fs.appendFileSync(logPath, JSON.stringify({location:'leaveRequests.js:46',message:'Employee filter added',data:{employeeId:employee},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})+'\n');
+      } catch(e){}
+      // #endregion
     } else if (req.user.role.name === 'employee') {
       // Employees can only see their own requests
       const emp = await Employee.findOne({ email: req.user.email });
       if (emp) {
         query.employee = emp._id;
+        // #region agent log
+        try {
+          fs.appendFileSync(logPath, JSON.stringify({location:'leaveRequests.js:52',message:'Employee found by email',data:{employeeId:emp._id.toString(),email:req.user.email},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})+'\n');
+        } catch(e){}
+        // #endregion
       } else {
+        // #region agent log
+        try {
+          fs.appendFileSync(logPath, JSON.stringify({location:'leaveRequests.js:57',message:'Employee not found by email',data:{email:req.user.email},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})+'\n');
+        } catch(e){}
+        // #endregion
         return res.json([]);
       }
     }
@@ -71,6 +100,12 @@ router.get('/', auth, async (req, res) => {
       ];
     }
 
+    // #region agent log
+    try {
+      fs.appendFileSync(logPath, JSON.stringify({location:'leaveRequests.js:85',message:'Final query before find',data:{query:JSON.stringify(query)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})+'\n');
+    } catch(e){}
+    // #endregion
+
     const requests = await LeaveRequest.find(query)
       .populate('employee', 'firstName lastName email employeeNumber')
       .populate('company', 'name')
@@ -81,8 +116,19 @@ router.get('/', auth, async (req, res) => {
       .populate('createdByAdmin', 'email')
       .sort({ createdAt: -1 });
 
+    // #region agent log
+    try {
+      fs.appendFileSync(logPath, JSON.stringify({location:'leaveRequests.js:98',message:'Requests found',data:{count:requests.length,requestIds:requests.map(r=>r._id.toString())},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})+'\n');
+    } catch(e){}
+    // #endregion
+
     res.json(requests);
   } catch (error) {
+    // #region agent log
+    try {
+      fs.appendFileSync(logPath, JSON.stringify({location:'leaveRequests.js:103',message:'Error in GET /leave-requests',data:{error:error.message,stack:error.stack},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})+'\n');
+    } catch(e){}
+    // #endregion
     res.status(500).json({ message: 'Hata', error: error.message });
   }
 });

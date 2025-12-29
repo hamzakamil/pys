@@ -74,6 +74,8 @@ const leaveTypeRoutes = require('./routes/leaveTypes');
 const managerRoutes = require('./routes/managers');
 const employmentRoutes = require('./routes/employment');
 const companyHolidaysRoutes = require('./routes/companyHolidays');
+const dashboardRoutes = require('./routes/dashboard');
+const requestsRoutes = require('./routes/requests');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/dealers', dealerRoutes);
@@ -94,6 +96,8 @@ app.use('/api/leave-types', leaveTypeRoutes);
 app.use('/api/managers', managerRoutes);
 app.use('/api/employment', employmentRoutes);
 app.use('/api/company-holidays', companyHolidaysRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/requests', requestsRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

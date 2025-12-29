@@ -6,6 +6,14 @@ const { auth, requireRole } = require('../middleware/auth');
 
 // Get all departments
 router.get('/', auth, async (req, res) => {
+  // #region agent log
+  const fs = require('fs');
+  const path = require('path');
+  const logPath = path.join(__dirname, '../../.cursor/debug.log');
+  try {
+    fs.appendFileSync(logPath, JSON.stringify({location:'departments.js:9',message:'GET /departments entry',data:{query:req.query,userRole:req.user.role.name,userCompany:req.user.company?.toString()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'}) + '\n');
+  } catch(e) {}
+  // #endregion
   try {
     let query = {};
     
@@ -38,12 +46,22 @@ router.get('/', auth, async (req, res) => {
       }
     }
 
+    // #region agent log
+    try {
+      fs.appendFileSync(logPath, JSON.stringify({location:'departments.js:41',message:'Before Department.find',data:{query:query},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'}) + '\n');
+    } catch(e) {}
+    // #endregion
     const departments = await Department.find(query)
       .populate('company')
       .populate('parentDepartment', 'name')
       .populate('workingHours', 'name')
       .populate('manager', 'firstName lastName email')
       .sort({ parentDepartment: 1, createdAt: -1 });
+    // #region agent log
+    try {
+      fs.appendFileSync(logPath, JSON.stringify({location:'departments.js:47',message:'After Department.find',data:{departmentsCount:departments.length,firstDept:departments[0]},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'}) + '\n');
+    } catch(e) {}
+    // #endregion
 
     res.json(departments);
   } catch (error) {

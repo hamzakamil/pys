@@ -70,6 +70,10 @@ const employmentPreRecordSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  jobName: {
+    type: String,
+    default: null // Görevi (Meslek) açıklama alanı
+  },
   ucret: {
     type: Number,
     required: true // Sadece ücret rakamı, net/brüt bilgisi şirket ayarından
@@ -111,8 +115,8 @@ const employmentPreRecordSchema = new mongoose.Schema({
   // Onay süreci
   status: {
     type: String,
-    enum: ['PENDING_COMPANY_APPROVAL', 'PENDING_DEALER_APPROVAL', 'APPROVED', 'REJECTED'],
-    default: 'PENDING_COMPANY_APPROVAL'
+    enum: ['PENDING_APPROVAL', 'PENDING_COMPANY_APPROVAL', 'PENDING_DEALER_APPROVAL', 'APPROVED', 'REJECTED', 'ASKIDA', 'IPTAL'],
+    default: 'PENDING_APPROVAL'
   },
       pendingDate: {
         type: Date,
