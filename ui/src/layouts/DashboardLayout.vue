@@ -62,18 +62,27 @@ const menuItems = computed(() => {
     items.push({ path: '/', name: 'Dashboard' })
     items.push({ path: '/dealers', name: 'Bayiler' })
     items.push({ path: '/companies', name: 'Şirketler' })
+    items.push({ path: '/role-management', name: 'Yetki Yönetimi' })
+    items.push({ path: '/user-management', name: 'Kullanıcı Yönetimi' })
     items.push({ path: '/working-permits', name: 'Çalışan İzinleri' })
       } else if (role === 'bayi_admin') {
         items.push({ path: '/', name: 'Dashboard' })
         items.push({ path: '/companies', name: 'Şirketler' })
+        items.push({ path: '/role-management', name: 'Yetki Yönetimi' })
+        items.push({ path: '/user-management', name: 'Kullanıcı Yönetimi' })
         items.push({ path: '/departments', name: 'Departmanlar' })
         items.push({ path: '/working-hours', name: 'Çalışma Saatleri' })
         items.push({ path: '/employees', name: 'Çalışanlar' })
         items.push({ path: '/attendance-calendar', name: 'Puantaj Takvimi' })
+        items.push({ path: '/leave-requests', name: 'İzin Yönetimi > Talepler' })
+        items.push({ path: '/leave-reports', name: 'İzin Yönetimi > Raporlar' })
         items.push({ path: '/employment/list', name: 'İşe Giriş & Çıkış İşlemleri' })
-      } else if (['company_admin', 'resmi_muhasebe_ik'].includes(role)) {
+      } else if (['company_admin', 'resmi_muhasebe_ik', 'SIRKET_ADMIN', 'IK_OPERASYON'].includes(role)) {
         items.push({ path: '/', name: 'Dashboard' })
         items.push({ path: '/settings', name: 'Ayarlar' })
+        if (role === 'company_admin') {
+          items.push({ path: '/user-management', name: 'Kullanıcı Yönetimi' })
+        }
         items.push({ path: '/whatsapp-settings', name: 'WhatsApp Ayarları' })
         items.push({ path: '/holiday-calendar', name: 'Resmi Tatiller' })
         items.push({ path: '/working-permits', name: 'Çalışan İzinleri' })
@@ -82,7 +91,8 @@ const menuItems = computed(() => {
         items.push({ path: '/employees', name: 'Çalışanlar' })
         items.push({ path: '/attendance-templates', name: 'Puantaj Şablonları' })
         items.push({ path: '/attendance-calendar', name: 'Puantaj Takvimi' })
-        items.push({ path: '/leave-requests', name: 'İzin Talepleri' })
+        items.push({ path: '/leave-requests', name: 'İzin Yönetimi > Talepler' })
+        items.push({ path: '/leave-reports', name: 'İzin Yönetimi > Raporlar' })
         items.push({ path: '/approvals', name: 'Onaylar' })
         items.push({ path: '/leave-balances', name: 'İzin Bakiyeleri' })
         items.push({ path: '/leave-summary', name: 'Çalışan İzin Özeti' })

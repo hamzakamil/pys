@@ -192,7 +192,7 @@
 
     <!-- Boş Durum -->
     <div v-if="preRecords.length === 0" class="bg-white rounded-lg shadow text-center py-12">
-      <p class="text-gray-500">Henüz işe giriş/çıkış işlem kaydı bulunmamaktadır.</p>
+        <p class="text-gray-500">Henüz işe giriş/çıkış işlem kaydı bulunmamaktadır.</p>
     </div>
 
     <!-- Reddetme Modal -->
@@ -367,7 +367,7 @@ const loadPreRecords = async () => {
     const response = await api.get('/employment/list')
     
     if (response.data && response.data.success) {
-      preRecords.value = response.data.data || []
+    preRecords.value = response.data.data || []
     } else {
       preRecords.value = []
       console.error('İşlem kayıtları yüklenemedi: Başarısız yanıt')

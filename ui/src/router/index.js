@@ -51,6 +51,18 @@ const router = createRouter({
           meta: { roles: ['company_admin', 'resmi_muhasebe_ik'] }
         },
         {
+          path: 'user-management',
+          name: 'UserManagement',
+          component: () => import('@/views/UserManagement.vue'),
+          meta: { roles: ['super_admin', 'bayi_admin', 'company_admin'] }
+        },
+        {
+          path: 'role-management',
+          name: 'RoleManagement',
+          component: () => import('@/views/RoleManagement.vue'),
+          meta: { roles: ['super_admin', 'bayi_admin'] }
+        },
+        {
           path: 'whatsapp-settings',
           name: 'WhatsAppSettings',
           component: () => import('@/views/WhatsAppSettings.vue'),
@@ -102,7 +114,13 @@ const router = createRouter({
           path: 'leave-requests',
           name: 'LeaveRequests',
           component: () => import('@/views/LeaveRequests.vue'),
-          meta: { roles: ['super_admin', 'bayi_admin', 'company_admin', 'resmi_muhasebe_ik', 'employee'] }
+          meta: { roles: ['super_admin', 'bayi_admin', 'company_admin', 'resmi_muhasebe_ik', 'employee', 'SIRKET_ADMIN', 'BAYI_ADMIN', 'SUPER_ADMIN', 'IK_OPERASYON'] }
+        },
+        {
+          path: 'leave-reports',
+          name: 'LeaveReports',
+          component: () => import('@/views/LeaveReports.vue'),
+          meta: { roles: ['super_admin', 'bayi_admin', 'company_admin', 'resmi_muhasebe_ik', 'SIRKET_ADMIN', 'BAYI_ADMIN', 'SUPER_ADMIN', 'IK_OPERASYON'] }
         },
         {
           path: 'my-leaves',

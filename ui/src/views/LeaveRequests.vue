@@ -5,20 +5,60 @@
       <Button v-if="canCreate" @click="showModal = true">Yeni İzin Talebi</Button>
     </div>
 
-    <div class="mb-4 flex gap-2">
-      <select
-        v-model="filterStatus"
-        @change="loadRequests"
-        class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-      >
-        <option value="">Tüm Durumlar</option>
-        <option value="PENDING">Bekleyen</option>
-        <option value="IN_PROGRESS">Onay Sürecinde</option>
-        <option value="APPROVED">Onaylanan</option>
-        <option value="REJECTED">Reddedilen</option>
-        <option value="CANCELLED">İptal Edilen</option>
-        <option value="CANCELLATION_REQUESTED">İptal Talebi</option>
-      </select>
+    <div class="mb-4 space-y-3">
+      <div class="flex flex-wrap gap-2">
+        <select
+          v-model="filters.status"
+          @change="loadRequests"
+          class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="">Tüm Durumlar</option>
+          <option value="PENDING">Bekleyen</option>
+          <option value="IN_PROGRESS">Onay Sürecinde</option>
+          <option value="APPROVED">Onaylanan</option>
+          <option value="REJECTED">Reddedilen</option>
+          <option value="CANCELLED">İptal Edilen</option>
+          <option value="CANCELLATION_REQUESTED">İptal Talebi</option>
+          <option value="SUSPENDED">Askıda</option>
+        </select>
+        
+        <select
+          v-model="filters.leaveType"
+          @change="loadRequests"
+          class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="">Tüm İzin Türleri</option>
+          <option v-for="type in leaveTypes" :key="type._id" :value="type._id">
+            {{ type.name }}
+          </option>
+        </select>
+
+        <input
+          v-model="filters.employeeName"
+          @input="debounceLoadRequests"
+          type="text"
+          placeholder="Çalışan adı ara..."
+          class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+
+        <input
+          v-model="filters.startDate"
+          type="date"
+          placeholder="Başlangıç Tarihi"
+          class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          @change="loadRequests"
+        />
+
+        <input
+          v-model="filters.endDate"
+          type="date"
+          placeholder="Bitiş Tarihi"
+          class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          @change="loadRequests"
+        />
+
+        <Button variant="secondary" @click="resetFilters">Filtreleri Temizle</Button>
+      </div>
     </div>
 
     <div class="bg-white rounded-lg shadow overflow-hidden">
@@ -31,6 +71,7 @@
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bitiş</th>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Gün</th>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Durum</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Onaylayıcı</th>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">İşlemler</th>
           </tr>
         </thead>
@@ -60,36 +101,64 @@
                   'bg-green-100 text-green-800': request.status === 'APPROVED',
                   'bg-red-100 text-red-800': request.status === 'REJECTED',
                   'bg-gray-100 text-gray-800': request.status === 'CANCELLED',
-                  'bg-orange-100 text-orange-800': request.status === 'CANCELLATION_REQUESTED'
+                  'bg-orange-100 text-orange-800': request.status === 'CANCELLATION_REQUESTED',
+                  'bg-purple-100 text-purple-800': request.status === 'SUSPENDED'
                 }"
                 class="px-2 py-1 text-xs font-semibold rounded-full"
               >
                 {{ getStatusText(request.status) }}
               </span>
             </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+              <span v-if="request.currentApprover">
+                {{ request.currentApprover.firstName }} {{ request.currentApprover.lastName }}
+              </span>
+              <span v-else-if="request.status === 'APPROVED'" class="text-green-600">Onaylandı</span>
+              <span v-else-if="request.status === 'REJECTED'" class="text-red-600">Reddedildi</span>
+              <span v-else class="text-gray-400">-</span>
+            </td>
             <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
               <button
                 v-if="canReview && (request.status === 'PENDING' || request.status === 'IN_PROGRESS') && !request.isAdminCreated"
                 @click="reviewRequest(request, 'approved')"
-                class="text-green-600 hover:text-green-900 mr-4"
+                class="text-green-600 hover:text-green-900 mr-2"
+                title="Onayla"
               >
-                Onayla
+                ✓
               </button>
               <button
                 v-if="canReview && (request.status === 'PENDING' || request.status === 'IN_PROGRESS') && !request.isAdminCreated"
                 @click="openRejectModal(request)"
-                class="text-red-600 hover:text-red-900 mr-4"
+                class="text-red-600 hover:text-red-900 mr-2"
+                title="Reddet"
               >
-                Reddet
+                ✗
+              </button>
+              <button
+                v-if="canReview && (request.status === 'PENDING' || request.status === 'IN_PROGRESS') && !request.isAdminCreated"
+                @click="suspendRequest(request)"
+                class="text-purple-600 hover:text-purple-900 mr-2"
+                title="Askıya Al"
+              >
+                ⏸
+              </button>
+              <button
+                v-if="canReview && request.status === 'SUSPENDED'"
+                @click="resumeRequest(request)"
+                class="text-blue-600 hover:text-blue-900 mr-2"
+                title="Devam Ettir"
+              >
+                ▶
               </button>
               <button
                 v-if="canReview && request.status === 'CANCELLATION_REQUESTED'"
                 @click="approveCancellation(request)"
-                class="text-orange-600 hover:text-orange-900 mr-4"
+                class="text-orange-600 hover:text-orange-900 mr-2"
+                title="İptal Talebini Onayla"
               >
-                İptal Talebini Onayla
+                ✓
               </button>
-              <button @click="viewDetails(request)" class="text-blue-600 hover:text-blue-900">Detay</button>
+              <button @click="viewDetails(request)" class="text-blue-600 hover:text-blue-900" title="Detay">👁</button>
             </td>
           </tr>
         </tbody>
@@ -330,9 +399,26 @@ const showRejectModal = ref(false)
 const selectedRequest = ref(null)
 const rejectingRequest = ref(null)
 const rejectReason = ref('')
-const filterStatus = ref('')
 const saving = ref(false)
 const descriptionRequired = ref(false)
+
+// Pagination ve filtreleme
+const filters = ref({
+  status: '',
+  leaveType: '',
+  employeeName: '',
+  startDate: '',
+  endDate: ''
+})
+
+const pagination = ref({
+  page: 1,
+  limit: 20,
+  total: 0,
+  totalPages: 0
+})
+
+let debounceTimer = null
 
 const form = ref({
   company: '',
@@ -505,27 +591,105 @@ const handleStartDateChange = () => {
 }
 
 const loadRequests = async () => {
-  // #region agent log
-  fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'LeaveRequests.vue:495',message:'loadRequests called',data:{filterStatus:filterStatus.value,hasFilterStatus:!!filterStatus.value},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-  // #endregion
   try {
-    const params = {}
-    if (filterStatus.value) {
-      params.status = filterStatus.value
+    const params = {
+      page: pagination.value.page,
+      limit: pagination.value.limit
     }
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'LeaveRequests.vue:502',message:'Before API call',data:{params,url:'/leave-requests'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-    // #endregion
+    
+    if (filters.value.status) {
+      params.status = filters.value.status
+    }
+    
+    if (filters.value.leaveType) {
+      params.leaveType = filters.value.leaveType
+    }
+    
+    if (filters.value.employeeName) {
+      params.employeeName = filters.value.employeeName
+    }
+    
+    if (filters.value.startDate) {
+      params.startDate = filters.value.startDate
+    }
+    
+    if (filters.value.endDate) {
+      params.endDate = filters.value.endDate
+    }
+    
     const response = await api.get('/leave-requests', { params })
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'LeaveRequests.vue:505',message:'API response received',data:{requestsCount:response.data?.length,hasData:!!response.data,firstRequestStatus:response.data?.[0]?.status,firstRequestId:response.data?.[0]?._id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-    // #endregion
-    requests.value = response.data
+    
+    if (response.data.success) {
+      requests.value = response.data.data || []
+      pagination.value = {
+        page: response.data.pagination.page,
+        limit: response.data.pagination.limit,
+        total: response.data.pagination.total,
+        totalPages: response.data.pagination.totalPages
+      }
+    } else {
+      requests.value = response.data || []
+    }
   } catch (error) {
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'LeaveRequests.vue:510',message:'Error loading requests',data:{errorMessage:error.message,responseError:error.response?.data?.error},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-    // #endregion
     console.error('Talepler yüklenemedi:', error)
+    requests.value = []
+  }
+}
+
+const debounceLoadRequests = () => {
+  if (debounceTimer) {
+    clearTimeout(debounceTimer)
+  }
+  debounceTimer = setTimeout(() => {
+    pagination.value.page = 1
+    loadRequests()
+  }, 500)
+}
+
+const resetFilters = () => {
+  filters.value = {
+    status: '',
+    leaveType: '',
+    employeeName: '',
+    startDate: '',
+    endDate: ''
+  }
+  pagination.value.page = 1
+  loadRequests()
+}
+
+const changePage = (page) => {
+  pagination.value.page = page
+  loadRequests()
+}
+
+const suspendRequest = async (request) => {
+  if (!confirm('Bu izin talebini askıya almak istediğinizden emin misiniz?')) {
+    return
+  }
+  
+  try {
+    await api.post(`/leave-requests/${request._id}/suspend`, {
+      note: 'İzin talebi askıya alındı'
+    })
+    alert('İzin talebi askıya alındı')
+    loadRequests()
+  } catch (error) {
+    alert(error.response?.data?.message || 'Hata oluştu')
+  }
+}
+
+const resumeRequest = async (request) => {
+  if (!confirm('Bu izin talebini devam ettirmek istediğinizden emin misiniz?')) {
+    return
+  }
+  
+  try {
+    await api.post(`/leave-requests/${request._id}/resume`)
+    alert('İzin talebi devam ettirildi')
+    loadRequests()
+  } catch (error) {
+    alert(error.response?.data?.message || 'Hata oluştu')
   }
 }
 
@@ -802,7 +966,10 @@ const getStatusText = (status) => {
     'PENDING': 'Bekleyen',
     'IN_PROGRESS': 'Onay Sürecinde',
     'APPROVED': 'Onaylandı',
-    'REJECTED': 'Reddedildi'
+    'REJECTED': 'Reddedildi',
+    'CANCELLED': 'İptal Edildi',
+    'CANCELLATION_REQUESTED': 'İptal Talebi',
+    'SUSPENDED': 'Askıda'
   }
   return statusMap[status] || status
 }

@@ -420,7 +420,7 @@ const checkWarnings = async () => {
 
 const handleSubmit = async () => {
   try {
-    // Ad Soyad'ı büyük harfe çevir
+  // Ad Soyad'ı büyük harfe çevir
     if (form.value.fullName) {
       form.value.fullName = form.value.fullName.trim().toUpperCase()
     }
@@ -437,39 +437,39 @@ const handleSubmit = async () => {
       employmentType: form.value.employmentType,
       startDate: form.value.startDate
     })
-    
-    // Validasyon - Zorunlu alanlar
-    if (!form.value.companyId) {
-      alert('Şirket Seçimi Zorunludur.')
-      return
-    }
-    
+  
+  // Validasyon - Zorunlu alanlar
+  if (!form.value.companyId) {
+    alert('Şirket Seçimi Zorunludur.')
+    return
+  }
+  
     if (!form.value.startDate) {
-      alert('İşe Giriş Tarihi Zorunludur.')
-      return
-    }
-    
+    alert('İşe Giriş Tarihi Zorunludur.')
+    return
+  }
+  
     if (!form.value.fullName || form.value.fullName.trim() === '') {
-      alert('Adı Soyadı Zorunludur.')
-      return
-    }
-    
+    alert('Adı Soyadı Zorunludur.')
+    return
+  }
+  
     if (!form.value.tckn || form.value.tckn.trim() === '') {
-      alert('TC Kimlik No Zorunludur.')
-      return
-    }
-    
+    alert('TC Kimlik No Zorunludur.')
+    return
+  }
+  
     const cleanTCKN = (form.value.tckn || '').replace(/\D/g, '')
     if (cleanTCKN.length !== 11 || !/^\d+$/.test(cleanTCKN)) {
-      alert('TC Kimlik No 11 Haneli Olmalıdır.')
-      return
-    }
-    
+    alert('TC Kimlik No 11 Haneli Olmalıdır.')
+    return
+  }
+  
     if (!form.value.sgkJobCode || form.value.sgkJobCode.trim() === '') {
-      alert('Görevi (SGK Meslek Kodu) Zorunludur.')
-      return
-    }
-
+    alert('Görevi (SGK Meslek Kodu) Zorunludur.')
+    return
+  }
+  
     if (!form.value.phone || form.value.phone.trim() === '') {
       alert('Telefon Zorunludur.')
       return
@@ -479,10 +479,10 @@ const handleSubmit = async () => {
     const cleanPhone = (form.value.phone || '').replace(/\D/g, '')
     if (cleanPhone.length !== 11 || !cleanPhone.startsWith('0')) {
       alert('Telefon Numarası 11 Haneli ve 0 ile Başlamalıdır')
-      return
-    }
+    return
+  }
 
-    saving.value = true
+  saving.value = true
     
     // Default değerler - eksik alanlar için
     const employmentData = {

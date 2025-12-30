@@ -9,6 +9,7 @@ const Employee = require('../models/Employee');
 const Company = require('../models/Company');
 const Workplace = require('../models/Workplace');
 const { auth, requireRole } = require('../middleware/auth');
+const { requirePermission } = require('../middleware/permissions');
 const {
   isExceptionSector,
   validateHireDate,
@@ -1009,7 +1010,8 @@ router.get('/', auth, requireRole('company_admin', 'resmi_muhasebe_ik', 'super_a
 /**
  * POST /api/employment/:id/approve - İşe giriş/çıkış ön-kaydını onayla
  */
-router.post('/:id/approve', auth, requireRole('company_admin', 'resmi_muhasebe_ik', 'super_admin', 'bayi_admin'), async (req, res) => {
+// Permission-based kontrol: attendance:approve yetkisi gerekli
+router.post('/:id/approve', auth, requirePermission('attendance:approve'), async (req, res) => {
   try {
     const preRecord = await EmploymentPreRecord.findById(req.params.id)
       .populate('companyId')

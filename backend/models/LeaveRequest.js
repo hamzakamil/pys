@@ -75,7 +75,7 @@ const leaveRequestSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['PENDING', 'IN_PROGRESS', 'APPROVED', 'REJECTED', 'CANCELLED', 'CANCELLATION_REQUESTED'],
+    enum: ['PENDING', 'IN_PROGRESS', 'APPROVED', 'REJECTED', 'CANCELLED', 'CANCELLATION_REQUESTED', 'SUSPENDED'],
     default: 'PENDING'
   },
   currentApprover: {
@@ -91,7 +91,7 @@ const leaveRequestSchema = new mongoose.Schema({
     },
     status: {
       type: String,
-      enum: ['PENDING', 'IN_PROGRESS', 'APPROVED', 'REJECTED', 'CANCELLED', 'CANCELLATION_REQUESTED'],
+      enum: ['PENDING', 'IN_PROGRESS', 'APPROVED', 'REJECTED', 'CANCELLED', 'CANCELLATION_REQUESTED', 'SUSPENDED'],
       required: true
     },
     note: {

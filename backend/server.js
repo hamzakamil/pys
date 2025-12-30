@@ -78,6 +78,9 @@ const dashboardRoutes = require('./routes/dashboard');
 const requestsRoutes = require('./routes/requests');
 const whatsappRoutes = require('./routes/whatsapp');
 const leavesRoutes = require('./routes/leaves');
+const rolesRoutes = require('./routes/roles');
+const permissionsRoutes = require('./routes/permissions');
+const usersRoutes = require('./routes/users');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/dealers', dealerRoutes);
@@ -102,6 +105,9 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/requests', requestsRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/leave', leavesRoutes);
+app.use('/api/roles', rolesRoutes);
+app.use('/api/permissions', permissionsRoutes);
+app.use('/api/users', usersRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

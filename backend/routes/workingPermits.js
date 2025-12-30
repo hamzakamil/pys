@@ -5,14 +5,6 @@ const { auth, requireRole } = require('../middleware/auth');
 
 // Get all working permits (default + company specific)
 router.get('/', auth, async (req, res) => {
-  // #region agent log
-  const fs = require('fs');
-  const path = require('path');
-  const logPath = path.join(__dirname, '../../.cursor/debug.log');
-  try {
-    fs.appendFileSync(logPath, JSON.stringify({location:'workingPermits.js:7',message:'GET /working-permits called',data:{queryCompanyId:req.query.companyId,userRole:req.user?.role?.name,userCompany:req.user?.company?.toString()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H2'}) + '\n');
-  } catch(e) {}
-  // #endregion
   try {
     let query = {};
     const { companyId } = req.query;
@@ -62,26 +54,6 @@ router.get('/', auth, async (req, res) => {
       .populate('parentPermitId', 'name')
       .populate('company', 'name')
       .sort({ isDefault: -1, parentPermitId: 1, createdAt: -1 });
-    // #region agent log
-    try {
-      let targetCompanyIdForLog = null;
-      if (['company_admin', 'resmi_muhasebe_ik', 'employee'].includes(req.user.role.name)) {
-        targetCompanyIdForLog = companyId || req.user.company;
-      } else if (req.user.role.name === 'bayi_admin') {
-        targetCompanyIdForLog = companyId;
-      } else if (req.user.role.name === 'super_admin') {
-        targetCompanyIdForLog = companyId;
-      }
-      // Also check if any permits exist for this company without the query filter
-      if (targetCompanyIdForLog) {
-        const allPermitsForCompany = await WorkingPermit.find({ company: targetCompanyIdForLog });
-        const defaultPermitsForCompany = await WorkingPermit.find({ isDefault: true, company: targetCompanyIdForLog });
-        fs.appendFileSync(logPath, JSON.stringify({location:'workingPermits.js:61',message:'Permits found',data:{permitsCount:permits.length,query:JSON.stringify(query),allPermitsCount:allPermitsForCompany.length,defaultPermitsCount:defaultPermitsForCompany.length,targetCompanyId:targetCompanyIdForLog},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H2'}) + '\n');
-      } else {
-        fs.appendFileSync(logPath, JSON.stringify({location:'workingPermits.js:61',message:'Permits found',data:{permitsCount:permits.length,query:JSON.stringify(query)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H2'}) + '\n');
-      }
-    } catch(e) {}
-    // #endregion
     
     // Eğer izin türü yoksa ve şirket belirtilmişse, varsayılan izin türlerini oluştur
     if (permits.length === 0 && (['company_admin', 'resmi_muhasebe_ik', 'employee'].includes(req.user.role.name) && (companyId || req.user.company))) {

@@ -306,7 +306,7 @@ const checkWarnings = async () => {
     const response = await api.post('/employment/validate-termination-date', {
       terminationDate: form.value.terminationDate
     })
-    
+  
     if (response.data.success) {
       warnings.value = response.data.warnings || []
     }
@@ -391,10 +391,10 @@ onMounted(async () => {
   
   // Tarih değişikliklerini dinle
   setTimeout(() => {
-    const terminationDateInput = document.querySelector('input[type="date"]')
-    if (terminationDateInput) {
-      terminationDateInput.addEventListener('change', checkWarnings)
-    }
+  const terminationDateInput = document.querySelector('input[type="date"]')
+  if (terminationDateInput) {
+    terminationDateInput.addEventListener('change', checkWarnings)
+  }
   }, 100)
 })
 </script>
