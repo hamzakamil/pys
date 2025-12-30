@@ -76,6 +76,8 @@ const employmentRoutes = require('./routes/employment');
 const companyHolidaysRoutes = require('./routes/companyHolidays');
 const dashboardRoutes = require('./routes/dashboard');
 const requestsRoutes = require('./routes/requests');
+const whatsappRoutes = require('./routes/whatsapp');
+const leavesRoutes = require('./routes/leaves');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/dealers', dealerRoutes);
@@ -98,6 +100,8 @@ app.use('/api/employment', employmentRoutes);
 app.use('/api/company-holidays', companyHolidaysRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/requests', requestsRoutes);
+app.use('/api/whatsapp', whatsappRoutes);
+app.use('/api/leave', leavesRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

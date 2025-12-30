@@ -9,6 +9,8 @@ const Employee = require('../models/Employee');
 const Company = require('../models/Company');
 const Department = require('../models/Department');
 const WorkingPermit = require('../models/WorkingPermit');
+const CompanyLeaveType = require('../models/CompanyLeaveType');
+const LeaveSubType = require('../models/LeaveSubType');
 const { auth, requireRole } = require('../middleware/auth');
 const { calculateLeaveDays, calculateSeniority, calculateAge, calculateAnnualLeaveDays, getEmployeeWeekendDays, calculateWorkingDays } = require('../utils/leaveCalculator');
 
@@ -33,58 +35,71 @@ const upload = multer({
 
 // Get all leave requests
 router.get('/', auth, async (req, res) => {
-  // #region agent log
-  const fs = require('fs');
-  const path = require('path');
-  const logPath = path.join(__dirname, '../../.cursor/debug.log');
-  try {
-    fs.appendFileSync(logPath, JSON.stringify({location:'leaveRequests.js:35',message:'GET /leave-requests entry',data:{query:req.query,userRole:req.user?.role?.name,userId:req.user?._id?.toString()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})+'\n');
-  } catch(e){}
-  // #endregion
   try {
     let query = {};
     const { status, employee, company, startDate, endDate } = req.query;
 
-    // #region agent log
-    try {
-      fs.appendFileSync(logPath, JSON.stringify({location:'leaveRequests.js:42',message:'Query params parsed',data:{status,employee,company,startDate,endDate,userRole:req.user?.role?.name},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');
-    } catch(e){}
-    // #endregion
+    // Kullanıcının employee kaydını bul (yönetici kontrolü için gerekli)
+    const currentUserEmployee = await Employee.findOne({ email: req.user.email });
 
     if (employee) {
       query.employee = employee;
-      // #region agent log
-      try {
-        fs.appendFileSync(logPath, JSON.stringify({location:'leaveRequests.js:46',message:'Employee filter added',data:{employeeId:employee},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})+'\n');
-      } catch(e){}
-      // #endregion
     } else if (req.user.role.name === 'employee') {
-      // Employees can only see their own requests
-      const emp = await Employee.findOne({ email: req.user.email });
-      if (emp) {
-        query.employee = emp._id;
-        // #region agent log
-        try {
-          fs.appendFileSync(logPath, JSON.stringify({location:'leaveRequests.js:52',message:'Employee found by email',data:{employeeId:emp._id.toString(),email:req.user.email},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})+'\n');
-        } catch(e){}
-        // #endregion
+      // Çalışan (yetki seviyesi 3) - sadece kendi taleplerini görür
+      if (currentUserEmployee) {
+        query.employee = currentUserEmployee._id;
       } else {
-        // #region agent log
-        try {
-          fs.appendFileSync(logPath, JSON.stringify({location:'leaveRequests.js:57',message:'Employee not found by email',data:{email:req.user.email},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})+'\n');
-        } catch(e){}
-        // #endregion
         return res.json([]);
       }
-    }
-
-    if (company) {
-      query.company = company;
     } else if (['company_admin', 'resmi_muhasebe_ik'].includes(req.user.role.name)) {
-      query.company = req.user.company;
+      // Şirket adminleri (yetki seviyesi 1) - tüm talepleri görür
+      if (company) {
+        query.company = company;
+      } else {
+        query.company = req.user.company;
+      }
     } else if (req.user.role.name === 'bayi_admin') {
-      const companies = await Company.find({ dealer: req.user.dealer });
-      query.company = { $in: companies.map(c => c._id) };
+      // Bayi admin - bayi şirketlerinin taleplerini görür
+      if (company) {
+        const companyDoc = await Company.findById(company);
+        if (!companyDoc || companyDoc.dealer.toString() !== req.user.dealer.toString()) {
+          return res.status(403).json({ message: 'Yetkiniz yok' });
+        }
+        query.company = company;
+      } else {
+        const companies = await Company.find({ dealer: req.user.dealer });
+        query.company = { $in: companies.map(c => c._id) };
+      }
+    } else if (currentUserEmployee && currentUserEmployee.department) {
+      // Yetkilendirilmiş yönetici (yetki seviyesi 2) - kendi birimindeki çalışanların taleplerini görür
+      // Yönetici, kendi departmanındaki çalışanların taleplerini görür
+      const department = await Department.findById(currentUserEmployee.department);
+      if (department && department.manager && department.manager.toString() === currentUserEmployee._id.toString()) {
+        // Bu yönetici departman yöneticisi, departmandaki tüm çalışanların taleplerini görebilir
+        const departmentEmployees = await Employee.find({ department: currentUserEmployee.department });
+        query.employee = { $in: departmentEmployees.map(e => e._id) };
+        query.company = currentUserEmployee.company; // Aynı şirket içinde kalmalı
+      } else if (currentUserEmployee.manager) {
+        // Eğer departman yöneticisi değilse, sadece kendi yönettiği çalışanların taleplerini görebilir
+        const managedEmployees = await Employee.find({ manager: currentUserEmployee._id });
+        if (managedEmployees.length > 0) {
+          query.employee = { $in: managedEmployees.map(e => e._id) };
+          query.company = currentUserEmployee.company;
+        } else {
+          // Yönettiği kimse yoksa, kendi taleplerini görsün
+          query.employee = currentUserEmployee._id;
+        }
+      } else {
+        // Yönetici değilse, sadece kendi taleplerini görsün
+        query.employee = currentUserEmployee._id;
+      }
+    } else {
+      // Diğer durumlar için sadece kendi taleplerini görsün
+      if (currentUserEmployee) {
+        query.employee = currentUserEmployee._id;
+      } else {
+        return res.json([]);
+      }
     }
 
     if (status) {
@@ -100,35 +115,27 @@ router.get('/', auth, async (req, res) => {
       ];
     }
 
-    // #region agent log
-    try {
-      fs.appendFileSync(logPath, JSON.stringify({location:'leaveRequests.js:85',message:'Final query before find',data:{query:JSON.stringify(query)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})+'\n');
-    } catch(e){}
-    // #endregion
-
     const requests = await LeaveRequest.find(query)
-      .populate('employee', 'firstName lastName email employeeNumber')
+      .populate('employee', 'firstName lastName email employeeNumber department manager')
       .populate('company', 'name')
-      .populate('companyLeaveType', 'name description isOtherCategory')
-      .populate('leaveSubType', 'name description')
+      .populate({
+        path: 'companyLeaveType',
+        model: 'WorkingPermit',
+        select: 'name description parentPermitId'
+      })
+      .populate({
+        path: 'leaveSubType',
+        model: 'WorkingPermit',
+        select: 'name description parentPermitId',
+        strictPopulate: false
+      })
       .populate('reviewedBy', 'email')
       .populate('currentApprover', 'firstName lastName email')
       .populate('createdByAdmin', 'email')
       .sort({ createdAt: -1 });
 
-    // #region agent log
-    try {
-      fs.appendFileSync(logPath, JSON.stringify({location:'leaveRequests.js:98',message:'Requests found',data:{count:requests.length,requestIds:requests.map(r=>r._id.toString())},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})+'\n');
-    } catch(e){}
-    // #endregion
-
     res.json(requests);
   } catch (error) {
-    // #region agent log
-    try {
-      fs.appendFileSync(logPath, JSON.stringify({location:'leaveRequests.js:103',message:'Error in GET /leave-requests',data:{error:error.message,stack:error.stack},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})+'\n');
-    } catch(e){}
-    // #endregion
     res.status(500).json({ message: 'Hata', error: error.message });
   }
 });
@@ -284,12 +291,21 @@ router.get('/pending', auth, async (req, res) => {
 
 // Create leave request
 router.post('/', auth, upload.single('document'), async (req, res) => {
+  // #region agent log
+  const fs = require('fs');
+  const path = require('path');
+  const logPath = path.join(__dirname, '../../.cursor/debug.log');
+  try {
+    fs.appendFileSync(logPath, JSON.stringify({location:'leaveRequests.js:293',message:'POST /leave-requests called',data:{body:req.body,hasCompanyLeaveType:!!req.body.companyLeaveType,companyLeaveType:req.body.companyLeaveType,userRole:req.user?.role?.name},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H3'}) + '\n');
+  } catch(e) {}
+  // #endregion
   try {
     const {
       companyLeaveType,
       leaveSubType,
       startDate,
       endDate,
+      returnDate,
       startTime,
       endTime,
       isHalfDay,
@@ -298,6 +314,11 @@ router.post('/', auth, upload.single('document'), async (req, res) => {
       hours,
       description
     } = req.body;
+    // #region agent log
+    try {
+      fs.appendFileSync(logPath, JSON.stringify({location:'leaveRequests.js:309',message:'Body destructured',data:{companyLeaveType,leaveSubType,startDate,endDate,hasEmployee:!!req.body.employee},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H4'}) + '\n');
+    } catch(e) {}
+    // #endregion
 
     // Find employee
     let employee;
@@ -322,41 +343,84 @@ router.post('/', auth, upload.single('document'), async (req, res) => {
       return res.status(404).json({ message: 'Şirket bulunamadı' });
     }
 
-    // Check company leave type
+    // Check working permit (yeni model yapısı)
     if (!companyLeaveType) {
       return res.status(400).json({ success: false, message: 'İzin türü seçilmelidir' });
     }
 
-    const companyLeaveTypeDoc = await CompanyLeaveType.findById(companyLeaveType)
-      .populate('leaveType', 'name description defaultDays');
-    if (!companyLeaveTypeDoc) {
+    // WorkingPermit modelini kullan (yeni yapı)
+    const workingPermit = await WorkingPermit.findById(companyLeaveType);
+    // #region agent log
+    try {
+      fs.appendFileSync(logPath, JSON.stringify({location:'leaveRequests.js:339',message:'WorkingPermit found',data:{hasWorkingPermit:!!workingPermit,workingPermitId:workingPermit?._id,workingPermitName:workingPermit?.name},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H4'}) + '\n');
+    } catch(e) {}
+    // #endregion
+    if (!workingPermit) {
+      // #region agent log
+      try {
+        fs.appendFileSync(logPath, JSON.stringify({location:'leaveRequests.js:342',message:'WorkingPermit not found',data:{companyLeaveType},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H4'}) + '\n');
+      } catch(e) {}
+      // #endregion
       return res.status(404).json({ success: false, message: 'İzin türü bulunamadı' });
     }
 
-    // Check if company leave type belongs to employee's company
-    if (companyLeaveTypeDoc.company.toString() !== employee.company.toString()) {
+    // Check if working permit belongs to employee's company
+    if (workingPermit.company.toString() !== employee.company.toString()) {
       return res.status(403).json({ success: false, message: 'Bu izin türü bu şirkete ait değil' });
     }
 
-    // Check if "Diğer" category requires sub type
-    if (companyLeaveTypeDoc.isOtherCategory && !leaveSubType) {
+    // Check if "Diğer izinler" category requires sub type
+    const isOtherCategory = workingPermit.name === 'Diğer izinler';
+    if (isOtherCategory && !leaveSubType) {
       return res.status(400).json({ success: false, message: 'Alt izin türü seçilmelidir' });
     }
 
     // Check leave sub type if provided
     let leaveSubTypeDoc = null;
     if (leaveSubType) {
-      leaveSubTypeDoc = await LeaveSubType.findById(leaveSubType);
+      leaveSubTypeDoc = await WorkingPermit.findById(leaveSubType);
       if (!leaveSubTypeDoc) {
         return res.status(404).json({ success: false, message: 'Alt izin türü bulunamadı' });
+      }
+      // Alt izin türünün parent'ı doğru mu kontrol et
+      if (leaveSubTypeDoc.parentPermitId?.toString() !== workingPermit._id.toString()) {
+        return res.status(400).json({ success: false, message: 'Alt izin türü bu kategoriye ait değil' });
       }
     }
 
     // Check if unpaid leave requires description
-    const isUnpaidLeave = companyLeaveTypeDoc.name.toLowerCase().includes('ücretsiz') || 
-                          companyLeaveTypeDoc.name.toLowerCase().includes('mazeret');
+    const leaveTypeName = leaveSubTypeDoc ? leaveSubTypeDoc.name : workingPermit.name;
+    const isUnpaidLeave = leaveTypeName.toLowerCase().includes('ücretsiz') || 
+                          leaveTypeName.toLowerCase().includes('mazeret');
     if (isUnpaidLeave && !description) {
       return res.status(400).json({ success: false, message: 'Ücretsiz izinlerde açıklama zorunludur' });
+    }
+
+    // Yıllık izin kontrolü - Parçalı kullanım kuralı
+    const isAnnualLeave = leaveTypeName.toLowerCase().includes('yıllık');
+    if (isAnnualLeave) {
+      const leavePolicy = company.leavePolicy || { allowSplitLeave: true, minFirstBlockDays: 10 };
+      
+      // Mevcut yıllık izin taleplerini kontrol et (aynı yıl içinde)
+      const currentYear = new Date().getFullYear();
+      const existingAnnualLeaves = await LeaveRequest.find({
+        employee: employee._id,
+        companyLeaveType: companyLeaveType,
+        status: { $in: ['PENDING', 'IN_PROGRESS', 'APPROVED'] },
+        startDate: { $gte: new Date(`${currentYear}-01-01`), $lte: new Date(`${currentYear}-12-31`) }
+      });
+      
+      // Parçalı kullanım kontrolü
+      const requestedBlocks = existingAnnualLeaves.length + 1; // Mevcut + yeni talep
+      if (!leavePolicy.allowSplitLeave && requestedBlocks > 1) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Bu şirkette izin tek parça kullanılabilir.' 
+        });
+      }
+      
+      // İlk parça 10 gün zorunluluğu kaldırıldı
+      // Artık herhangi bir gün sayısı ile yıllık izin alınabilir
     }
 
     // Calculate total days based on return date if provided, otherwise use endDate
@@ -368,7 +432,13 @@ router.post('/', auth, upload.single('document'), async (req, res) => {
       calculatedEndDate = calculatedReturnDate;
     }
 
+    // Yıllık izin için pazar günü kontrolü
+    // Tarih aralığında Pazar varsa otomatik düş
+    // Pazar izin süresine dahil edilmeyecek
+    // calculateLeaveDays fonksiyonu zaten weekendDays kullanarak pazar günlerini düşüyor
+
     // Calculate total days (excluding weekends based on employee's weekend settings)
+    // Yıllık izin için pazar günleri otomatik olarak düşülür (weekendDays içinde 0 = Pazar)
     const totalDays = await calculateLeaveDays(
       new Date(startDate),
       new Date(calculatedEndDate),
@@ -419,13 +489,13 @@ router.post('/', auth, upload.single('document'), async (req, res) => {
       initialStatus = 'APPROVED';
     }
 
-    // İzin tipini al (type field için)
-    const leaveTypeName = leaveSubTypeDoc ? leaveSubTypeDoc.name : companyLeaveTypeDoc.name;
+    // İzin tipini al (type field için) - yukarıda zaten tanımlı
+    // const leaveTypeName = leaveSubTypeDoc ? leaveSubTypeDoc.name : workingPermit.name;
 
     const leaveRequest = new LeaveRequest({
       employee: employee._id,
       company: company._id,
-      companyLeaveType: companyLeaveTypeDoc._id,
+      companyLeaveType: workingPermit._id, // WorkingPermit ID'si
       leaveSubType: leaveSubTypeDoc ? leaveSubTypeDoc._id : null,
       type: leaveTypeName, // String olarak izin tipi (backward compatibility)
       startDate: new Date(startDate),
@@ -467,15 +537,56 @@ router.post('/', auth, upload.single('document'), async (req, res) => {
         date: new Date()
       });
       await leaveRequest.save();
+      
+      // Admin tarafından oluşturulan yıllık izin için calculatedDays'i set et
+      const leaveTypeName = (leaveSubTypeDoc ? leaveSubTypeDoc.name : workingPermit.name).toLowerCase();
+      if (leaveTypeName.includes('yıllık') || leaveTypeName === 'yıllık izin') {
+        // Pazar günü sayısını hesapla
+        let sundayCount = 0;
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const current = new Date(start);
+        
+        while (current <= end) {
+          if (current.getDay() === 0) { // 0 = Pazar
+            sundayCount++;
+          }
+          current.setDate(current.getDate() + 1);
+        }
+        
+        // calculatedDays = requestedDays - sundayCount (Pazar hariç)
+        const totalCalendarDays = Math.floor((end - start) / (1000 * 60 * 60 * 24)) + 1;
+        const requestedDays = totalCalendarDays;
+        leaveRequest.calculatedDays = requestedDays - sundayCount;
+        await leaveRequest.save();
+      }
     }
 
     const populated = await LeaveRequest.findById(leaveRequest._id)
       .populate('employee', 'firstName lastName email employeeNumber')
       .populate('company', 'name')
-      .populate('companyLeaveType', 'name description isOtherCategory')
-      .populate('leaveSubType', 'name description')
+      .populate({
+        path: 'companyLeaveType',
+        model: 'WorkingPermit',
+        select: 'name description parentPermitId'
+      })
+      .populate({
+        path: 'leaveSubType',
+        model: 'WorkingPermit',
+        select: 'name description parentPermitId',
+        strictPopulate: false
+      })
       .populate('currentApprover', 'firstName lastName email')
       .populate('history.approver', 'firstName lastName email');
+
+    // #region agent log
+    try { 
+      const fs = require('fs');
+      const path = require('path');
+      const logPath = path.join(__dirname, '../../.cursor/debug.log');
+      fs.appendFileSync(logPath, JSON.stringify({location:'leaveRequests.js:517',message:'Leave request created',data:{leaveRequestId:leaveRequest._id.toString(),status:leaveRequest.status,initialStatus,isAdminCreated,hasCurrentApprover:!!currentApprover,employeeId:employee._id.toString()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})+'\n'); 
+    } catch(e){}
+    // #endregion
 
     return res.status(201).json({
       success: true,
@@ -483,7 +594,12 @@ router.post('/', auth, upload.single('document'), async (req, res) => {
       data: populated
     });
   } catch (error) {
-    res.status(500).json({ message: 'Hata', error: error.message });
+    console.error('İzin talebi oluşturma hatası:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Hata', 
+      error: error.message 
+    });
   }
 });
 
@@ -587,8 +703,29 @@ router.post('/:id/approve', auth, async (req, res) => {
     // Eğer onaylandıysa ve yıllık izin ise balance güncelle
     if (leaveRequest.status === 'APPROVED') {
       const leaveTypeName = (leaveRequest.leaveSubType?.name || leaveRequest.companyLeaveType?.name || leaveRequest.type || '').toLowerCase();
-      if (leaveTypeName.includes('yıllık')) {
-        await updateLeaveBalance(employee._id, leaveRequest.totalDays);
+      if (leaveTypeName.includes('yıllık') || leaveRequest.type === 'Yıllık izin') {
+        // Pazar günü sayısını hesapla
+        let sundayCount = 0;
+        const start = new Date(leaveRequest.startDate);
+        const end = new Date(leaveRequest.endDate);
+        const current = new Date(start);
+        
+        while (current <= end) {
+          if (current.getDay() === 0) { // 0 = Pazar
+            sundayCount++;
+          }
+          current.setDate(current.getDate() + 1);
+        }
+        
+        // calculatedDays = requestedDays - sundayCount (Pazar hariç)
+        // totalDays zaten pazar hariç hesaplanmış, ama kullanıcı açıkça sundayCount çıkarmamızı istiyor
+        // Toplam gün sayısını hesapla (başlangıç ve bitiş dahil)
+        const totalCalendarDays = Math.floor((end - start) / (1000 * 60 * 60 * 24)) + 1;
+        const requestedDays = totalCalendarDays;
+        leaveRequest.calculatedDays = requestedDays - sundayCount;
+        
+        await leaveRequest.save();
+        await updateLeaveBalance(employee._id, leaveRequest.calculatedDays);
       }
     }
 
@@ -1017,6 +1154,218 @@ async function checkLeaveConflicts(employeeId, startDate, endDate, excludeReques
     conflicts
   };
 }
+
+// POST /api/leave-requests/:id/cancel - Çalışan talebi iptal eder
+router.post('/:id/cancel', auth, async (req, res) => {
+  try {
+    // Kullanıcının employee kaydını bul
+    const currentUserEmployee = await Employee.findOne({ email: req.user.email });
+    if (!currentUserEmployee) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Çalışan kaydı bulunamadı' 
+      });
+    }
+
+    const leaveRequest = await LeaveRequest.findById(req.params.id)
+      .populate('employee', 'firstName lastName email employeeNumber')
+      .populate('company')
+      .populate('companyLeaveType', 'name description parentPermitId')
+      .populate('leaveSubType', 'name description parentPermitId');
+
+    if (!leaveRequest) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'İzin talebi bulunamadı' 
+      });
+    }
+
+    // Sadece çalışan kendi talebini iptal edebilir
+    if (leaveRequest.employee._id.toString() !== currentUserEmployee._id.toString()) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Bu talebi iptal etme yetkiniz yok' 
+      });
+    }
+
+    // Status kontrolü
+    if (leaveRequest.status === 'APPROVED') {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Onaylanmış talepler iptal edilemez. Lütfen yöneticiniz ile iletişime geçin.' 
+      });
+    }
+
+    if (leaveRequest.status === 'CANCELLED') {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Bu talep zaten iptal edilmiş' 
+      });
+    }
+
+    if (leaveRequest.status === 'REJECTED') {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Reddedilmiş talepler iptal edilemez' 
+      });
+    }
+
+    // Henüz işlem görmediyse (PENDING ve currentApprover yok veya history boş) → direkt CANCELLED
+    // Onaya düştüyse (PENDING veya IN_PROGRESS ve currentApprover var) → CANCELLATION_REQUESTED
+    if ((leaveRequest.status === 'PENDING' && !leaveRequest.currentApprover && (!leaveRequest.history || leaveRequest.history.length === 0))) {
+      // Henüz işlem görmediyse direkt iptal et
+      leaveRequest.status = 'CANCELLED';
+      leaveRequest.currentApprover = null;
+
+      // History'ye ekle
+      leaveRequest.history.push({
+        approver: currentUserEmployee._id,
+        status: 'CANCELLED',
+        note: 'Çalışan tarafından iptal edildi',
+        date: new Date()
+      });
+
+      await leaveRequest.save();
+    } else if (leaveRequest.status === 'PENDING' || leaveRequest.status === 'IN_PROGRESS') {
+      // Onaya düştüyse iptal talebi oluştur
+      leaveRequest.status = 'CANCELLATION_REQUESTED';
+      // currentApprover'ı koru, çünkü admin/yönetici bu talebi onaylamalı
+
+      // History'ye ekle
+      leaveRequest.history.push({
+        approver: currentUserEmployee._id,
+        status: 'CANCELLATION_REQUESTED',
+        note: 'Çalışan tarafından iptal talebi oluşturuldu',
+        date: new Date()
+      });
+
+      await leaveRequest.save();
+    } else {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Bu talep durumu iptal edilemez' 
+      });
+    }
+
+    const populated = await LeaveRequest.findById(leaveRequest._id)
+      .populate('employee', 'firstName lastName email employeeNumber')
+      .populate('company', 'name')
+      .populate({
+        path: 'companyLeaveType',
+        model: 'WorkingPermit',
+        select: 'name description parentPermitId'
+      })
+      .populate({
+        path: 'leaveSubType',
+        model: 'WorkingPermit',
+        select: 'name description parentPermitId',
+        strictPopulate: false
+      })
+      .populate('currentApprover', 'firstName lastName email')
+      .populate('history.approver', 'firstName lastName email');
+
+    return res.json({
+      success: true,
+      message: leaveRequest.status === 'CANCELLED' ? 'İzin talebi iptal edildi' : 'İptal talebi oluşturuldu, yönetici onayı bekleniyor',
+      data: populated
+    });
+  } catch (error) {
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Hata', 
+      error: error.message 
+    });
+  }
+});
+
+// POST /api/leave-requests/:id/approve-cancellation - Admin/yönetici iptal talebini onaylar
+router.post('/:id/approve-cancellation', auth, async (req, res) => {
+  try {
+    // Kullanıcının employee kaydını bul
+    const approverEmployee = await Employee.findOne({ email: req.user.email });
+    if (!approverEmployee) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Çalışan kaydı bulunamadı' 
+      });
+    }
+
+    const leaveRequest = await LeaveRequest.findById(req.params.id)
+      .populate('employee', 'firstName lastName email employeeNumber department manager')
+      .populate('company')
+      .populate('companyLeaveType', 'name description parentPermitId')
+      .populate('leaveSubType', 'name description parentPermitId');
+
+    if (!leaveRequest) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'İzin talebi bulunamadı' 
+      });
+    }
+
+    // Sadece CANCELLATION_REQUESTED durumundaki talepler için çalışır
+    if (leaveRequest.status !== 'CANCELLATION_REQUESTED') {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Bu talep iptal talebi durumunda değil' 
+      });
+    }
+
+    // Yetki kontrolü: Admin veya yönetici olmalı
+    const isAdmin = ['company_admin', 'resmi_muhasebe_ik', 'super_admin', 'bayi_admin'].includes(req.user.role.name);
+    const isManager = leaveRequest.currentApprover && leaveRequest.currentApprover.toString() === approverEmployee._id.toString();
+
+    if (!isAdmin && !isManager) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'İptal talebini onaylama yetkiniz yok' 
+      });
+    }
+
+    // İptal talebini onayla
+    leaveRequest.status = 'CANCELLED';
+    leaveRequest.currentApprover = null;
+
+    // History'ye ekle
+    leaveRequest.history.push({
+      approver: approverEmployee._id,
+      status: 'CANCELLED',
+      note: req.body.note || 'İptal talebi onaylandı',
+      date: new Date()
+    });
+
+    await leaveRequest.save();
+
+    const populated = await LeaveRequest.findById(leaveRequest._id)
+      .populate('employee', 'firstName lastName email employeeNumber')
+      .populate('company', 'name')
+      .populate({
+        path: 'companyLeaveType',
+        model: 'WorkingPermit',
+        select: 'name description parentPermitId'
+      })
+      .populate({
+        path: 'leaveSubType',
+        model: 'WorkingPermit',
+        select: 'name description parentPermitId',
+        strictPopulate: false
+      })
+      .populate('currentApprover', 'firstName lastName email')
+      .populate('history.approver', 'firstName lastName email');
+
+    return res.json({
+      success: true,
+      message: 'İptal talebi onaylandı, izin talebi iptal edildi',
+      data: populated
+    });
+  } catch (error) {
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Hata', 
+      error: error.message 
+    });
+  }
+});
 
 // Get leave days calculation endpoint
 router.post('/calculate-days', auth, async (req, res) => {

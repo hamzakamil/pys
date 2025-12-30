@@ -74,6 +74,7 @@ const menuItems = computed(() => {
       } else if (['company_admin', 'resmi_muhasebe_ik'].includes(role)) {
         items.push({ path: '/', name: 'Dashboard' })
         items.push({ path: '/settings', name: 'Ayarlar' })
+        items.push({ path: '/whatsapp-settings', name: 'WhatsApp Ayarları' })
         items.push({ path: '/holiday-calendar', name: 'Resmi Tatiller' })
         items.push({ path: '/working-permits', name: 'Çalışan İzinleri' })
         items.push({ path: '/departments', name: 'Departmanlar' })
@@ -84,12 +85,15 @@ const menuItems = computed(() => {
         items.push({ path: '/leave-requests', name: 'İzin Talepleri' })
         items.push({ path: '/approvals', name: 'Onaylar' })
         items.push({ path: '/leave-balances', name: 'İzin Bakiyeleri' })
+        items.push({ path: '/leave-summary', name: 'Çalışan İzin Özeti' })
         items.push({ path: '/weekend-settings', name: 'Hafta Tatili Ayarları' })
         items.push({ path: '/employment/list', name: 'İşe Giriş & Çıkış İşlemleri' })
       } else if (role === 'employee') {
         items.push({ path: '/', name: 'Dashboard' })
+        items.push({ path: '/employee-leave-types', name: 'İzin Türleri' })
         items.push({ path: '/my-leaves', name: 'İzin Taleplerim' })
         items.push({ path: '/leave-balances', name: 'İzin Bakiyem' })
+        items.push({ path: '/leave-summary', name: 'İzin Özetim' })
       }
 
   // #region agent log

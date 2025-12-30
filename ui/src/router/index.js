@@ -51,6 +51,12 @@ const router = createRouter({
           meta: { roles: ['company_admin', 'resmi_muhasebe_ik'] }
         },
         {
+          path: 'whatsapp-settings',
+          name: 'WhatsAppSettings',
+          component: () => import('@/views/WhatsAppSettings.vue'),
+          meta: { roles: ['company_admin', 'resmi_muhasebe_ik', 'super_admin', 'bayi_admin'] }
+        },
+        {
           path: 'working-permits',
           name: 'WorkingPermits',
           component: () => import('@/views/WorkingPermits.vue'),
@@ -114,6 +120,30 @@ const router = createRouter({
           path: 'leave-balances',
           name: 'LeaveBalances',
           component: () => import('@/views/LeaveBalances.vue'),
+          meta: { roles: ['super_admin', 'bayi_admin', 'company_admin', 'resmi_muhasebe_ik', 'employee'] }
+        },
+        {
+          path: 'leave-summary',
+          name: 'LeaveSummary',
+          component: () => import('@/views/LeaveSummary.vue'),
+          meta: { roles: ['super_admin', 'bayi_admin', 'company_admin', 'resmi_muhasebe_ik', 'employee'] }
+        },
+        {
+          path: 'employee-leave-types',
+          name: 'EmployeeLeaveTypes',
+          component: () => import('@/views/EmployeeLeaveTypes.vue'),
+          meta: { roles: ['employee'] }
+        },
+        {
+          path: 'leaves/employee-summary',
+          name: 'EmployeeLeavesSummary',
+          component: () => import('@/views/Leaves/EmployeeLeavesSummary.vue'),
+          meta: { roles: ['super_admin', 'bayi_admin', 'company_admin', 'resmi_muhasebe_ik'] }
+        },
+        {
+          path: 'leaves/annual-calculation',
+          name: 'AnnualLeaveCalculation',
+          component: () => import('@/views/Leaves/AnnualLeaveCalculation.vue'),
           meta: { roles: ['super_admin', 'bayi_admin', 'company_admin', 'resmi_muhasebe_ik', 'employee'] }
         },
         {

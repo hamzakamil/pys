@@ -121,6 +121,16 @@ const companySchema = new mongoose.Schema({
   onboarding_requires_dealer_approval: {
     type: Boolean,
     default: false // İşe giriş için bayi onayı gerekli mi?
+  },
+  leavePolicy: {
+    allowSplitLeave: {
+      type: Boolean,
+      default: true
+    },
+    minFirstBlockDays: {
+      type: Number,
+      default: 10
+    }
   }
 }, {
   timestamps: true

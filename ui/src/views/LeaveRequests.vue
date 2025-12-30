@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div class="p-6">
     <div class="flex justify-between items-center mb-6">
       <h1 class="text-2xl font-bold text-gray-800">İzin Talepleri</h1>
       <Button v-if="canCreate" @click="showModal = true">Yeni İzin Talebi</Button>
@@ -12,9 +12,12 @@
         class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
       >
         <option value="">Tüm Durumlar</option>
-        <option value="pending">Bekleyen</option>
-        <option value="approved">Onaylanan</option>
-        <option value="rejected">Reddedilen</option>
+        <option value="PENDING">Bekleyen</option>
+        <option value="IN_PROGRESS">Onay Sürecinde</option>
+        <option value="APPROVED">Onaylanan</option>
+        <option value="REJECTED">Reddedilen</option>
+        <option value="CANCELLED">İptal Edilen</option>
+        <option value="CANCELLATION_REQUESTED">İptal Talebi</option>
       </select>
     </div>
 
@@ -55,18 +58,14 @@
                 :class="{
                   'bg-yellow-100 text-yellow-800': request.status === 'PENDING' || request.status === 'IN_PROGRESS',
                   'bg-green-100 text-green-800': request.status === 'APPROVED',
-                  'bg-red-100 text-red-800': request.status === 'REJECTED'
+                  'bg-red-100 text-red-800': request.status === 'REJECTED',
+                  'bg-gray-100 text-gray-800': request.status === 'CANCELLED',
+                  'bg-orange-100 text-orange-800': request.status === 'CANCELLATION_REQUESTED'
                 }"
                 class="px-2 py-1 text-xs font-semibold rounded-full"
               >
                 {{ getStatusText(request.status) }}
               </span>
-              <div v-if="request.isAdminCreated" class="mt-1 text-xs text-blue-600">
-                Admin tarafından oluşturuldu
-              </div>
-              <div v-if="request.status === 'IN_PROGRESS' && request.currentApprover" class="mt-1 text-xs text-yellow-600">
-                Onay bekleniyor: {{ request.currentApprover?.firstName }} {{ request.currentApprover?.lastName }}
-              </div>
             </td>
             <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
               <button
@@ -82,6 +81,13 @@
                 class="text-red-600 hover:text-red-900 mr-4"
               >
                 Reddet
+              </button>
+              <button
+                v-if="canReview && request.status === 'CANCELLATION_REQUESTED'"
+                @click="approveCancellation(request)"
+                class="text-orange-600 hover:text-orange-900 mr-4"
+              >
+                İptal Talebini Onayla
               </button>
               <button @click="viewDetails(request)" class="text-blue-600 hover:text-blue-900">Detay</button>
             </td>
@@ -113,31 +119,17 @@
             <!-- Çalışan seçimi (admin için) -->
             <div v-if="isAdmin">
               <label class="block text-sm font-medium text-gray-700 mb-1">Çalışan <span class="text-red-500">*</span></label>
-              <div class="space-y-2">
-                <!-- İşyeri filtresi -->
-                <div v-if="form.company && workplaces.length > 1">
-                  <label class="block text-xs font-medium text-gray-600 mb-1">İşyeri Filtresi</label>
-                  <select
-                    v-model="filterWorkplace"
-                    @change="filterEmployees"
-                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Tüm İşyerleri</option>
-                    <option v-for="wp in workplaces" :key="wp._id" :value="wp._id">{{ wp.name }}</option>
-                  </select>
-                </div>
-                <select
-                  v-model="form.employee"
-                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                  :disabled="!form.company && isBayiAdmin"
-                >
-                  <option value="">Seçiniz</option>
-                  <option v-for="emp in filteredEmployees" :key="emp._id" :value="emp._id">
-                    {{ emp.firstName }} {{ emp.lastName }} {{ emp.employeeNumber ? `(${emp.employeeNumber})` : '' }}
-                  </option>
-                </select>
-              </div>
+              <select
+                v-model="form.employee"
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+                :disabled="!form.company && isBayiAdmin"
+              >
+                <option value="">Seçiniz</option>
+                <option v-for="emp in filteredEmployees" :key="emp._id" :value="emp._id">
+                  {{ emp.firstName }} {{ emp.lastName }} {{ emp.employeeNumber ? `(${emp.employeeNumber})` : '' }}
+                </option>
+              </select>
             </div>
             
             <div>
@@ -159,8 +151,8 @@
               </select>
             </div>
             
-            <!-- Alt izin türü (Diğer kategorisi için) -->
-            <div v-if="selectedLeaveType?.isOtherCategory && filteredSubTypes.length > 0">
+            <!-- Alt izin türü -->
+            <div v-if="selectedLeaveType?.name === 'Diğer izinler' && filteredSubTypes.length > 0">
               <label class="block text-sm font-medium text-gray-700 mb-1">Alt İzin Türü *</label>
               <select
                 v-model="form.leaveSubType"
@@ -173,75 +165,71 @@
                 </option>
               </select>
             </div>
+            
             <div class="grid grid-cols-2 gap-4">
               <Input
                 v-model="form.startDate"
                 type="date"
                 label="İzin Başlangıç Tarihi"
                 required
-                @input="calculateDays"
+                @input="handleStartDateChange"
               />
               <Input
-                v-model="form.returnDate"
+                v-model="form.endDate"
                 type="date"
-                label="İş Başı Tarihi"
+                label="İzin Bitiş Tarihi"
                 required
                 :min="form.startDate"
-                @input="calculateDays"
+                :max="isSameDayRequired ? form.startDate : undefined"
+                :disabled="isSameDayRequired"
               />
             </div>
-            <div v-if="calculatedDays > 0 && !form.isHourly && !form.isHalfDay" class="bg-blue-50 p-3 rounded-lg">
-              <p class="text-sm text-blue-800">
-                <strong>Kullanılacak İzin Süresi:</strong> {{ calculatedDays }} gün
-              </p>
-            </div>
-            <div class="flex items-center gap-4">
+            
+            <!-- Yarım Gün Seçeneği -->
+            <div v-if="showHalfDayOption" class="flex items-center gap-4">
               <label class="flex items-center">
                 <input type="checkbox" v-model="form.isHalfDay" class="mr-2" @change="handleHalfDayChange" />
                 <span class="text-sm text-gray-700">Yarım Gün</span>
               </label>
+              <div v-if="form.isHalfDay">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Yarım Gün Dönemi</label>
+                <select
+                  v-model="form.halfDayPeriod"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="morning">Öğleden Önce</option>
+                  <option value="afternoon">Öğleden Sonra</option>
+                </select>
+              </div>
+            </div>
+            
+            <!-- Saatlik İzin Seçeneği -->
+            <div v-if="showHourlyOption" class="flex items-center gap-4">
               <label class="flex items-center">
                 <input type="checkbox" v-model="form.isHourly" class="mr-2" @change="handleHourlyChange" />
                 <span class="text-sm text-gray-700">Saatlik İzin</span>
               </label>
-            </div>
-            <div v-if="form.isHalfDay">
-              <label class="block text-sm font-medium text-gray-700 mb-1">Yarım Gün Dönemi</label>
-              <select
-                v-model="form.halfDayPeriod"
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="morning">Öğleden Önce</option>
-                <option value="afternoon">Öğleden Sonra</option>
-              </select>
-            </div>
-            <div v-if="form.isHourly" class="grid grid-cols-2 gap-4">
-              <Input
-                v-model="form.startTime"
-                type="time"
-                label="Başlangıç Saati"
-                @input="calculateHours"
-              />
-              <Input
-                v-model="form.endTime"
-                type="time"
-                label="Bitiş Saati"
-                @input="calculateHours"
-              />
-              <div v-if="calculatedHours > 0" class="col-span-2 bg-blue-50 p-3 rounded-lg">
-                <p class="text-sm text-blue-800">
-                  <strong>Toplam Saat:</strong> {{ calculatedHours }} saat
-                  <span v-if="calculatedHours >= 8" class="text-yellow-700 font-semibold">
-                    ({{ (calculatedHours / 8).toFixed(1) }} gün - Telafi çalışması veya 1 gün ücretsiz izin gerekebilir)
-                  </span>
-                </p>
+              <div v-if="form.isHourly" class="grid grid-cols-2 gap-4 flex-1">
+                <Input
+                  v-model="form.startTime"
+                  type="time"
+                  label="Başlangıç Saati"
+                  @input="calculateHours"
+                />
+                <Input
+                  v-model="form.endTime"
+                  type="time"
+                  label="Bitiş Saati"
+                  @input="calculateHours"
+                />
+                <div v-if="calculatedHours > 0" class="col-span-2 bg-blue-50 p-3 rounded-lg">
+                  <p class="text-sm text-blue-800">
+                    <strong>Toplam Saat:</strong> {{ calculatedHours }} saat
+                  </p>
+                </div>
               </div>
             </div>
-            <div v-if="conflictWarning" class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-2">
-              <p class="text-sm text-yellow-800 font-semibold">⚠️ Uyarı: İzin Çakışması Tespit Edildi</p>
-              <p class="text-sm text-yellow-700 mt-2">{{ conflictWarning }}</p>
-              <p class="text-sm text-yellow-700 mt-1">Yıllık izin tarihlerinizi düzeltmek için yeni bir izin talebi oluşturmanız gerekebilir.</p>
-            </div>
+            
             <Textarea
               v-model="form.description"
               label="Açıklama"
@@ -274,7 +262,7 @@
             <strong>Çalışan:</strong> {{ selectedRequest.employee?.firstName }} {{ selectedRequest.employee?.lastName }}
           </div>
           <div>
-            <strong>İzin Türü:</strong> {{ selectedRequest.leaveType?.name }}
+            <strong>İzin Türü:</strong> {{ selectedRequest.leaveSubType?.name || selectedRequest.companyLeaveType?.name || selectedRequest.type }}
           </div>
           <div>
             <strong>Tarih:</strong> {{ formatDate(selectedRequest.startDate) }} - {{ formatDate(selectedRequest.endDate) }}
@@ -325,7 +313,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import api from '@/services/api'
 import Button from '@/components/Button.vue'
@@ -363,22 +351,42 @@ const form = ref({
   description: ''
 })
 
+const employees = ref([])
+const filteredEmployees = ref([])
+const workplaces = ref([])
+const filterWorkplace = ref(null)
+const companies = ref([])
+
 const selectedLeaveType = computed(() => {
   return leaveTypes.value.find(t => t._id === form.value.companyLeaveType)
 })
 
 const filteredSubTypes = computed(() => {
-  if (!selectedLeaveType.value?.isOtherCategory) {
+  if (!selectedLeaveType.value || selectedLeaveType.value.name !== 'Diğer izinler') {
     return []
   }
   return leaveSubTypes.value.filter(st => 
-    st.parentLeaveType && 
-    st.parentLeaveType.toString() === selectedLeaveType.value._id.toString()
+    st.parentPermitId && 
+    (st.parentPermitId === selectedLeaveType.value._id || 
+     st.parentPermitId._id === selectedLeaveType.value._id ||
+     st.parentPermitId.toString() === selectedLeaveType.value._id.toString())
   )
 })
 
-const conflictWarning = ref(null)
+const showHourlyOption = computed(() => {
+  return selectedLeaveType.value?.name === 'Saatlik İzin'
+})
 
+const showHalfDayOption = computed(() => {
+  return selectedLeaveType.value?.name === 'Saatlik İzin' || 
+         selectedLeaveType.value?.name === 'Yıllık izin (Ücretli İzin)'
+})
+
+const isSameDayRequired = computed(() => {
+  return form.value.isHourly || form.value.isHalfDay
+})
+
+const conflictWarning = ref(null)
 const file = ref(null)
 const calculatedDays = ref(0)
 const calculatedHours = ref(0)
@@ -396,23 +404,34 @@ const isReportLeave = computed(() => {
          selectedLeaveType.value?.name?.toLowerCase().includes('istirahat')
 })
 
-const loadLeaveSubTypes = async () => {
+const isBayiAdmin = computed(() => authStore.user?.role === 'bayi_admin')
+const isAdmin = computed(() => ['company_admin', 'resmi_muhasebe_ik', 'super_admin', 'bayi_admin'].includes(authStore.user?.role))
+
+const loadLeaveTypes = async () => {
   try {
-    const params = {}
-    if (selectedLeaveType.value?.isOtherCategory && selectedLeaveType.value._id) {
-      params.parentLeaveType = selectedLeaveType.value._id
-    }
+    let companyId = null
     if (form.value.company) {
-      params.companyId = form.value.company
+      companyId = form.value.company
     } else if (authStore.user?.company) {
-      params.companyId = authStore.user.company
+      companyId = authStore.user.company
     }
-    const response = await api.get('/leave-types/sub-types', { params })
+    
+    if (!companyId) {
+      console.error('Şirket bilgisi bulunamadı')
+      return
+    }
+    
+    const response = await api.get('/working-permits', {
+      params: { companyId }
+    })
+    
     if (response.data.success) {
-      leaveSubTypes.value = response.data.data || []
+      const allPermits = response.data.data || []
+      leaveTypes.value = allPermits.filter(p => !p.parentPermitId)
+      leaveSubTypes.value = allPermits.filter(p => p.parentPermitId)
     }
   } catch (error) {
-    console.error('Alt izin türleri yüklenemedi:', error)
+    console.error('İzin türleri yüklenemedi:', error)
   }
 }
 
@@ -434,12 +453,10 @@ const loadEmployeesForCompany = async () => {
   }
   
   try {
-    // Çalışanları yükle
     const empResponse = await api.get('/employees', { params: { company: form.value.company } })
     employees.value = empResponse.data || []
     filteredEmployees.value = employees.value
     
-    // İşyerlerini yükle
     const wpResponse = await api.get('/workplaces', { params: { company: form.value.company } })
     workplaces.value = wpResponse.data || []
     
@@ -461,37 +478,54 @@ const filterEmployees = () => {
 
 const handleLeaveTypeChange = async () => {
   checkDescriptionRequired()
-  // Diğer kategorisi değilse alt izin türünü temizle
-  if (!selectedLeaveType.value?.isOtherCategory) {
+  if (selectedLeaveType.value?.name !== 'Diğer izinler') {
     form.value.leaveSubType = ''
-    leaveSubTypes.value = []
-  } else {
-    // Diğer kategorisi seçildiyse alt izin türlerini yükle
-    await loadLeaveSubTypes()
+  }
+  
+  if (!showHourlyOption.value) {
+    form.value.isHourly = false
+    form.value.startTime = ''
+    form.value.endTime = ''
+  }
+  if (!showHalfDayOption.value) {
+    form.value.isHalfDay = false
+    form.value.halfDayPeriod = 'morning'
+  }
+  
+  if (isSameDayRequired.value && form.value.startDate) {
+    form.value.endDate = form.value.startDate
   }
 }
 
+const handleStartDateChange = () => {
+  if (isSameDayRequired.value && form.value.startDate) {
+    form.value.endDate = form.value.startDate
+  }
+  calculateDays()
+}
+
 const loadRequests = async () => {
+  // #region agent log
+  fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'LeaveRequests.vue:495',message:'loadRequests called',data:{filterStatus:filterStatus.value,hasFilterStatus:!!filterStatus.value},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+  // #endregion
   try {
     const params = {}
     if (filterStatus.value) {
       params.status = filterStatus.value
     }
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'LeaveRequests.vue:502',message:'Before API call',data:{params,url:'/leave-requests'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
     const response = await api.get('/leave-requests', { params })
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'LeaveRequests.vue:505',message:'API response received',data:{requestsCount:response.data?.length,hasData:!!response.data,firstRequestStatus:response.data?.[0]?.status,firstRequestId:response.data?.[0]?._id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
     requests.value = response.data
   } catch (error) {
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'LeaveRequests.vue:510',message:'Error loading requests',data:{errorMessage:error.message,responseError:error.response?.data?.error},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
     console.error('Talepler yüklenemedi:', error)
-  }
-}
-
-const loadLeaveTypes = async () => {
-  try {
-    const response = await api.get('/leave-types')
-    if (response.data.success) {
-      leaveTypes.value = response.data.data || []
-    }
-  } catch (error) {
-    console.error('İzin türleri yüklenemedi:', error)
   }
 }
 
@@ -507,7 +541,6 @@ const calculateDays = async () => {
   }
 
   try {
-    // Find employee ID
     let employeeId = null
     if (authStore.user?.role === 'employee') {
       const employeesResponse = await api.get('/employees')
@@ -537,7 +570,6 @@ const calculateDays = async () => {
         conflictWarning.value = null
       }
     } else {
-      // Simple calculation if employee not found
       const start = new Date(form.value.startDate)
       const end = new Date(form.value.returnDate)
       const diffTime = Math.abs(end - start)
@@ -574,6 +606,11 @@ const calculateHours = () => {
 const handleHalfDayChange = () => {
   if (form.value.isHalfDay) {
     form.value.isHourly = false
+    form.value.startTime = ''
+    form.value.endTime = ''
+    if (form.value.startDate) {
+      form.value.endDate = form.value.startDate
+    }
     calculatedDays.value = 0.5
     conflictWarning.value = null
   } else {
@@ -584,6 +621,10 @@ const handleHalfDayChange = () => {
 const handleHourlyChange = () => {
   if (form.value.isHourly) {
     form.value.isHalfDay = false
+    form.value.halfDayPeriod = 'morning'
+    if (form.value.startDate) {
+      form.value.endDate = form.value.startDate
+    }
     calculatedDays.value = 0
     conflictWarning.value = null
   } else {
@@ -602,20 +643,37 @@ const handleFileChange = (event) => {
 }
 
 const saveRequest = async () => {
-  // Diğer kategorisi seçildiyse alt izin türü zorunlu
-  if (selectedLeaveType.value?.isOtherCategory && !form.value.leaveSubType) {
-    alert('Alt izin türü seçilmelidir')
-    return
-  }
-
-  // Diğer kategorisi seçildiyse alt izin türü zorunlu
-  if (selectedLeaveType.value?.isOtherCategory && !form.value.leaveSubType) {
+  // #region agent log
+  fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'LeaveRequests.vue:645',message:'saveRequest called',data:{formValue:form.value,selectedLeaveType:selectedLeaveType.value?.name},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1'})}).catch(()=>{});
+  // #endregion
+  if (selectedLeaveType.value?.name === 'Diğer izinler' && !form.value.leaveSubType) {
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'LeaveRequests.vue:647',message:'Validation failed: leaveSubType required',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H2'})}).catch(()=>{});
+    // #endregion
     alert('Alt izin türü seçilmelidir')
     return
   }
   
-  // Admin için çalışan seçimi zorunlu
+  if ((form.value.isHourly || form.value.isHalfDay) && form.value.startDate !== form.value.endDate) {
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'LeaveRequests.vue:652',message:'Validation failed: same day required',data:{startDate:form.value.startDate,endDate:form.value.endDate},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H2'})}).catch(()=>{});
+    // #endregion
+    alert('Saatlik ve yarım gün izinler için başlangıç ve bitiş tarihi aynı gün olmalıdır')
+    return
+  }
+
+  if (form.value.isHourly && (!form.value.startTime || !form.value.endTime)) {
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'LeaveRequests.vue:657',message:'Validation failed: time required',data:{startTime:form.value.startTime,endTime:form.value.endTime},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H2'})}).catch(()=>{});
+    // #endregion
+    alert('Saatlik izin için başlangıç ve bitiş saati gereklidir')
+    return
+  }
+  
   if (isAdmin.value && !form.value.employee) {
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'LeaveRequests.vue:662',message:'Validation failed: employee required',data:{isAdmin:isAdmin.value},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H2'})}).catch(()=>{});
+    // #endregion
     alert('Çalışan seçilmelidir')
     return
   }
@@ -631,8 +689,7 @@ const saveRequest = async () => {
       formData.append('leaveSubType', form.value.leaveSubType)
     }
     formData.append('startDate', form.value.startDate)
-    // Use returnDate as endDate for calculation, but also send returnDate separately
-    formData.append('endDate', form.value.returnDate || form.value.startDate)
+    formData.append('endDate', form.value.endDate || form.value.startDate)
     if (form.value.returnDate) formData.append('returnDate', form.value.returnDate)
     formData.append('isHalfDay', form.value.isHalfDay)
     formData.append('halfDayPeriod', form.value.halfDayPeriod)
@@ -642,16 +699,29 @@ const saveRequest = async () => {
     if (form.value.hours) formData.append('hours', form.value.hours)
     if (form.value.description) formData.append('description', form.value.description)
     if (file.value) formData.append('document', file.value)
+    // #region agent log
+    const formDataEntries = {}
+    for (const [key, value] of formData.entries()) {
+      formDataEntries[key] = typeof value === 'string' ? value : '[FILE]'
+    }
+    fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'LeaveRequests.vue:686',message:'Before API call',data:{formDataEntries,endpoint:'/leave-requests'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H3'})}).catch(()=>{});
+    // #endregion
 
     await api.post('/leave-requests', formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       }
     })
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'LeaveRequests.vue:692',message:'API call success',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H3'})}).catch(()=>{});
+    // #endregion
 
     closeModal()
     loadRequests()
   } catch (error) {
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'LeaveRequests.vue:698',message:'API call error',data:{errorMessage:error.message,errorResponse:error.response?.data,errorStatus:error.response?.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H3'})}).catch(()=>{});
+    // #endregion
     alert(error.response?.data?.message || 'Hata oluştu')
   } finally {
     saving.value = false
@@ -660,17 +730,25 @@ const saveRequest = async () => {
 
 const reviewRequest = async (request, status) => {
   try {
-    const payload = {
-      status,
-      rejectedReason: status === 'rejected' ? rejectReason.value : null
+    if (status === 'approved') {
+      await api.post(`/leave-requests/${request._id}/approve`, {})
+    } else if (status === 'rejected') {
+      await api.post(`/leave-requests/${request._id}/reject`, { note: rejectReason.value })
+      showRejectModal.value = false
+      rejectReason.value = ''
     }
-
-    await api.put(`/leave-requests/${request._id}/review`, payload)
-    showRejectModal.value = false
-    rejectReason.value = ''
     loadRequests()
   } catch (error) {
-    alert(error.response?.data?.message || 'Hata oluştu')
+    alert(error.response?.data?.message || error.response?.data?.error || 'Hata oluştu')
+  }
+}
+
+const approveCancellation = async (request) => {
+  try {
+    await api.post(`/leave-requests/${request._id}/approve-cancellation`, {})
+    loadRequests()
+  } catch (error) {
+    alert(error.response?.data?.message || error.response?.data?.error || 'Hata oluştu')
   }
 }
 
@@ -724,10 +802,7 @@ const getStatusText = (status) => {
     'PENDING': 'Bekleyen',
     'IN_PROGRESS': 'Onay Sürecinde',
     'APPROVED': 'Onaylandı',
-    'REJECTED': 'Reddedildi',
-    pending: 'Bekleyen',
-    approved: 'Onaylanan',
-    rejected: 'Reddedilen'
+    'REJECTED': 'Reddedildi'
   }
   return statusMap[status] || status
 }
@@ -744,3 +819,5 @@ onMounted(async () => {
 })
 </script>
 
+<style scoped>
+</style>

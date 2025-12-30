@@ -57,14 +57,8 @@
                   <span v-else class="px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">
                     Şirket Özel
                   </span>
-                  <span v-if="leaveType.isActive === false" class="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
-                    Pasif
-                  </span>
                 </div>
                 <p v-if="leaveType.description" class="text-sm text-gray-500 mt-1">{{ leaveType.description }}</p>
-                <p v-if="leaveType.customDays !== null && leaveType.customDays !== undefined" class="text-xs text-gray-400 mt-1">
-                  Gün sayısı: {{ leaveType.customDays }}
-                </p>
               </div>
             </div>
             <div class="flex items-center gap-2">
@@ -86,7 +80,7 @@
           </div>
           
           <!-- Alt kategoriler (accordion) - "Diğer izinler" için -->
-          <div v-if="leaveType.isOtherCategory && getSubTypes(leaveType._id).length > 0" class="mt-3 ml-8">
+          <div v-if="leaveType.name === 'Diğer izinler' && getSubTypes(leaveType._id).length > 0" class="mt-3 ml-8">
             <button
               @click="toggleAccordion(leaveType._id)"
               class="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900"
@@ -173,12 +167,12 @@
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Üst Kategori (Opsiyonel)</label>
               <select
-                v-model="form.parentLeaveType"
+                v-model="form.parentPermitId"
                 class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">Ana kategori (üst kategori yok)</option>
                 <option
-                  v-for="lt in mainLeaveTypes.filter(lt => lt.isOtherCategory)"
+                  v-for="lt in mainLeaveTypes.filter(lt => lt.name === 'Diğer izinler')"
                   :key="lt._id"
                   :value="lt._id"
                 >
@@ -199,22 +193,6 @@
       </div>
     </div>
 
-    <!-- Alt İzin Türü Modal -->
-    <div v-if="showSubTypeModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
-      <div class="bg-white rounded-lg p-6 w-full max-w-md">
-        <h2 class="text-xl font-bold mb-4">{{ editingSubType ? 'Alt İzin Türü Düzenle' : 'Yeni Alt İzin Türü Ekle' }}</h2>
-        <form @submit.prevent="saveSubType">
-          <div class="space-y-4">
-            <Input v-model="subTypeForm.name" label="Alt İzin Türü Adı" required />
-            <Textarea v-model="subTypeForm.description" label="Açıklama" />
-            <div class="flex gap-2 justify-end">
-              <Button variant="secondary" @click="closeSubTypeModal">İptal</Button>
-              <Button type="submit">Kaydet</Button>
-            </div>
-          </div>
-        </form>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -228,10 +206,8 @@ import Textarea from '@/components/Textarea.vue'
 
 const authStore = useAuthStore()
 const leaveTypes = ref([])
-const subTypes = ref([])
 const companies = ref([])
 const showModal = ref(false)
-const showSubTypeModal = ref(false)
 const editingLeaveType = ref(null)
 const editingSubType = ref(null)
 const expandedLeaveTypes = ref([])
@@ -242,29 +218,30 @@ const selectedCompanyIds = ref([])
 const form = ref({
   name: '',
   description: '',
-  parentLeaveType: '',
-  customDays: null,
-  isOtherCategory: false
+  parentPermitId: ''
 })
 
 const subTypeForm = ref({
   name: '',
   description: '',
-  parentLeaveType: ''
+  parentPermitId: ''
 })
 
 const isSuperAdmin = computed(() => authStore.user?.role === 'super_admin')
 const isBayiAdmin = computed(() => authStore.user?.role === 'bayi_admin')
 const isCompanyAdmin = computed(() => ['company_admin', 'resmi_muhasebe_ik'].includes(authStore.user?.role))
 
-// Ana kategoriler (isOtherCategory olmayanlar veya parentLeaveType olmayanlar)
+// Ana kategoriler (parentPermitId olmayanlar)
 const mainLeaveTypes = computed(() => {
-  return leaveTypes.value.filter(lt => !lt.parentLeaveType || lt.isOtherCategory)
+  return leaveTypes.value.filter(lt => !lt.parentPermitId)
 })
 
 // Alt kategorileri getir
-const getSubTypes = (parentLeaveTypeId) => {
-  return subTypes.value.filter(st => st.parentLeaveType === parentLeaveTypeId || st.parentLeaveType?._id === parentLeaveTypeId)
+const getSubTypes = (parentPermitId) => {
+  return leaveTypes.value.filter(st => 
+    st.parentPermitId && 
+    (st.parentPermitId === parentPermitId || st.parentPermitId?._id === parentPermitId || st.parentPermitId?.toString() === parentPermitId?.toString())
+  )
 }
 
 // Accordion toggle
@@ -297,21 +274,11 @@ const canDelete = (leaveType) => {
 }
 
 const canEditSubType = (subType) => {
-  if (isSuperAdmin.value) return true
-  if (subType.isDefault) return false
-  if (isBayiAdmin.value) {
-    return selectedCompanyId.value && subType.company === selectedCompanyId.value
-  }
-  return subType.company === authStore.user?.company || subType.company?._id === authStore.user?.company
+  return canEdit(subType)
 }
 
 const canDeleteSubType = (subType) => {
-  if (isSuperAdmin.value) return true
-  if (subType.isDefault) return false
-  if (isBayiAdmin.value) {
-    return selectedCompanyId.value && subType.company === selectedCompanyId.value
-  }
-  return subType.company === authStore.user?.company || subType.company?._id === authStore.user?.company
+  return canDelete(subType)
 }
 
 const loadCompanies = async () => {
@@ -346,7 +313,6 @@ const loadLeaveTypes = async () => {
         fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'WorkingPermits.vue:333',message:'Bayi admin - no company selected',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
         // #endregion
         leaveTypes.value = []
-        subTypes.value = []
         return
       }
       companyId = selectedCompanyId.value
@@ -363,11 +329,10 @@ const loadLeaveTypes = async () => {
       fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'WorkingPermits.vue:346',message:'No companyId - returning empty',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
       // #endregion
       leaveTypes.value = []
-      subTypes.value = []
       return
     }
 
-    const response = await api.get('/leave-types', {
+    const response = await api.get('/working-permits', {
       params: { companyId }
     })
     
@@ -379,25 +344,8 @@ const loadLeaveTypes = async () => {
       leaveTypes.value = response.data.data || []
       
       // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'WorkingPermits.vue:357',message:'Leave types loaded',data:{count:leaveTypes.value.length,leaveTypeIds:leaveTypes.value.map(lt=>lt._id?.toString())},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+      fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'WorkingPermits.vue:357',message:'Working permits loaded',data:{count:leaveTypes.value.length,permitIds:leaveTypes.value.map(lt=>lt._id?.toString())},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
       // #endregion
-      
-      // Alt izin türlerini yükle
-      for (const lt of leaveTypes.value) {
-        if (lt.isOtherCategory) {
-          try {
-            const subTypesResponse = await api.get('/leave-types/sub-types', {
-              params: { parentLeaveType: lt._id }
-            })
-            if (subTypesResponse.data.success) {
-              const subTypesForParent = subTypesResponse.data.data || []
-              subTypes.value.push(...subTypesForParent)
-            }
-          } catch (error) {
-            console.error(`Alt izin türleri yüklenemedi (${lt._id}):`, error)
-          }
-        }
-      }
     } else {
       // #region agent log
       fetch('http://127.0.0.1:7243/ingest/ef99827f-649a-4ca0-b31c-87f9b1697091',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'WorkingPermits.vue:375',message:'API response not successful',data:{responseData:response.data},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
@@ -438,25 +386,51 @@ const saveLeaveType = async () => {
 
     const payload = {
       name: form.value.name.trim(),
-      description: form.value.description?.trim() || null,
-      customDays: form.value.customDays || null,
-      isOtherCategory: form.value.isOtherCategory || false
+      description: form.value.description?.trim() || null
     }
 
     if (isBayiAdmin.value && !editingLeaveType.value) {
-      payload.applyToAllCompanies = applyToAllCompanies.value
-      payload.selectedCompanyIds = applyToAllCompanies.value ? [] : selectedCompanyIds.value
+      if (applyToAllCompanies.value) {
+        // Tüm şirketler için oluştur
+        const promises = companies.value.map(comp => 
+          api.post('/working-permits', {
+            ...payload,
+            companyId: comp._id,
+            parentPermitId: form.value.parentPermitId || null
+          })
+        )
+        await Promise.all(promises)
+        closeModal()
+        loadLeaveTypes()
+        return
+      } else if (selectedCompanyIds.value && selectedCompanyIds.value.length > 0) {
+        // Seçili şirketler için oluştur
+        const promises = selectedCompanyIds.value.map(companyId => 
+          api.post('/working-permits', {
+            ...payload,
+            companyId: companyId,
+            parentPermitId: form.value.parentPermitId || null
+          })
+        )
+        await Promise.all(promises)
+        closeModal()
+        loadLeaveTypes()
+        return
+      } else {
+        // Tek şirket için
+        payload.companyId = selectedCompanyId.value
+      }
     }
 
-    if (form.value.parentLeaveType) {
-      payload.parentLeaveType = form.value.parentLeaveType
+    if (form.value.parentPermitId) {
+      payload.parentPermitId = form.value.parentPermitId
     }
 
     let response
     if (editingLeaveType.value) {
-      response = await api.put(`/leave-types/${editingLeaveType.value._id}`, payload)
+      response = await api.put(`/working-permits/${editingLeaveType.value._id}`, payload)
     } else {
-      response = await api.post('/leave-types', payload)
+      response = await api.post('/working-permits', payload)
     }
 
     if (response.data.success === false) {
@@ -480,9 +454,7 @@ const editLeaveType = (leaveType) => {
   form.value = {
     name: leaveType.name,
     description: leaveType.description || '',
-    parentLeaveType: leaveType.parentLeaveType?._id || leaveType.parentLeaveType || '',
-    customDays: leaveType.customDays || null,
-    isOtherCategory: leaveType.isOtherCategory || false
+    parentPermitId: leaveType.parentPermitId?._id || leaveType.parentPermitId || ''
   }
   showModal.value = true
 }
@@ -490,7 +462,7 @@ const editLeaveType = (leaveType) => {
 const deleteLeaveType = async (id) => {
   if (confirm('Bu izin türünü silmek istediğinize emin misiniz?')) {
     try {
-      const response = await api.delete(`/leave-types/${id}`)
+      const response = await api.delete(`/working-permits/${id}`)
       if (response.data.success === false) {
         alert(response.data.message || 'Hata oluştu')
         return
@@ -504,45 +476,18 @@ const deleteLeaveType = async (id) => {
 
 const editSubType = (subType) => {
   editingSubType.value = subType
-  subTypeForm.value = {
+  form.value = {
     name: subType.name,
     description: subType.description || '',
-    parentLeaveType: subType.parentLeaveType?._id || subType.parentLeaveType
+    parentPermitId: subType.parentPermitId?._id || subType.parentPermitId || ''
   }
-  showSubTypeModal.value = true
-}
-
-const saveSubType = async () => {
-  try {
-    const payload = {
-      name: subTypeForm.value.name.trim(),
-      description: subTypeForm.value.description?.trim() || null,
-      parentLeaveType: subTypeForm.value.parentLeaveType
-    }
-
-    let response
-    if (editingSubType.value) {
-      response = await api.put(`/leave-types/sub-types/${editingSubType.value._id}`, payload)
-    } else {
-      response = await api.post('/leave-types/sub-types', payload)
-    }
-
-    if (response.data.success === false) {
-      alert(response.data.message || 'Hata oluştu')
-      return
-    }
-
-    closeSubTypeModal()
-    loadLeaveTypes()
-  } catch (error) {
-    alert(error.response?.data?.message || error.response?.data?.error || 'Hata oluştu')
-  }
+  showModal.value = true
 }
 
 const deleteSubType = async (id) => {
   if (confirm('Bu alt izin türünü silmek istediğinize emin misiniz?')) {
     try {
-      const response = await api.delete(`/leave-types/sub-types/${id}`)
+      const response = await api.delete(`/working-permits/${id}`)
       if (response.data.success === false) {
         alert(response.data.message || 'Hata oluştu')
         return
@@ -557,25 +502,14 @@ const deleteSubType = async (id) => {
 const closeModal = () => {
   showModal.value = false
   editingLeaveType.value = null
+  editingSubType.value = null
   form.value = {
     name: '',
     description: '',
-    parentLeaveType: '',
-    customDays: null,
-    isOtherCategory: false
+    parentPermitId: ''
   }
   applyToAllCompanies.value = false
   selectedCompanyIds.value = []
-}
-
-const closeSubTypeModal = () => {
-  showSubTypeModal.value = false
-  editingSubType.value = null
-  subTypeForm.value = {
-    name: '',
-    description: '',
-    parentLeaveType: ''
-  }
 }
 
 onMounted(() => {

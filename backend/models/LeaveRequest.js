@@ -13,13 +13,13 @@ const leaveRequestSchema = new mongoose.Schema({
   },
   companyLeaveType: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'CompanyLeaveType',
+    ref: 'WorkingPermit', // Yeni model yapısı
     required: true
   },
   leaveSubType: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'LeaveSubType',
-    default: null // "Diğer" kategorisi seçildiğinde alt izin türü
+    ref: 'WorkingPermit', // Yeni model yapısı
+    default: null // "Diğer izinler" kategorisi seçildiğinde alt izin türü
   },
   type: {
     type: String,
@@ -63,6 +63,10 @@ const leaveRequestSchema = new mongoose.Schema({
     type: Number,
     required: true
   },
+  calculatedDays: {
+    type: Number,
+    default: 0
+  },
   description: {
     type: String
   },
@@ -71,7 +75,7 @@ const leaveRequestSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['PENDING', 'IN_PROGRESS', 'APPROVED', 'REJECTED'],
+    enum: ['PENDING', 'IN_PROGRESS', 'APPROVED', 'REJECTED', 'CANCELLED', 'CANCELLATION_REQUESTED'],
     default: 'PENDING'
   },
   currentApprover: {
@@ -87,7 +91,7 @@ const leaveRequestSchema = new mongoose.Schema({
     },
     status: {
       type: String,
-      enum: ['PENDING', 'IN_PROGRESS', 'APPROVED', 'REJECTED'],
+      enum: ['PENDING', 'IN_PROGRESS', 'APPROVED', 'REJECTED', 'CANCELLED', 'CANCELLATION_REQUESTED'],
       required: true
     },
     note: {

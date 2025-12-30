@@ -298,6 +298,21 @@ router.post('/', auth, requireRole('super_admin', 'bayi_admin'), async (req, res
       // İzin türleri oluşturulamazsa bile şirket oluşturma devam eder
     }
 
+    // Create default working permits (WorkingPermit model)
+    const { initializeDefaultPermits } = require('../services/permissionInitializer');
+    try {
+      await initializeDefaultPermits(company._id);
+      // #region agent log
+      debugLog('companies.js:298', 'Default working permits initialized', {companyId:company._id?.toString()}, 'A');
+      // #endregion
+    } catch (permitError) {
+      // #region agent log
+      debugLog('companies.js:301', 'Error initializing default working permits', {error:permitError.message,companyId:company._id?.toString()}, 'A');
+      // #endregion
+      console.error('Varsayılan izin türleri oluşturulurken hata:', permitError);
+      // İzin türleri oluşturulamazsa bile şirket oluşturma devam eder
+    }
+
     // Örnek pasif departmanlar oluştur
     // Satın Alma (pasif)
     await Department.create({
