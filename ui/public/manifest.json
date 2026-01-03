@@ -1,0 +1,50 @@
+{
+  "name": "Personel Yönetim Sistemi",
+  "short_name": "Personel YS",
+  "description": "Çalışan giriş/çıkış ve izin yönetim uygulaması",
+  "start_url": "/mobile",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "orientation": "portrait",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/vite.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "categories": ["business", "productivity"],
+  "shortcuts": [
+    {
+      "name": "Giriş Yap",
+      "short_name": "Giriş",
+      "description": "Hızlı giriş yap",
+      "url": "/mobile",
+      "icons": [{ "src": "/icons/icon-96x96.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "İzin Talepleri",
+      "short_name": "İzinler",
+      "description": "İzin taleplerini görüntüle",
+      "url": "/mobile/leaves",
+      "icons": [{ "src": "/icons/icon-96x96.png", "sizes": "96x96" }]
+    }
+  ]
+}
+
